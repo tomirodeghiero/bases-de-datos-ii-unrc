@@ -1,0 +1,17 @@
+{
+    "inventario": {
+        "items": [
+	   { "nombre": "tv", "cantidad": 25, "status": "A",
+	       "tamanio": { "alto": 14, "ancho": 21, "unidad": "cm" }, "colores": ["negro","amarillo"] },
+	   { "nombre": "notebook", "cantidad": 50, "status": "A",
+	       "tamanio": { "alto": 8.5, "ancho": 11, "unidad": "pulgadas" }, "colores": ["rojo","negro"] },
+	   { "nombre": "mesa", "cantidad": 100, "status": "D",
+	       "tamanio": { "alto": 8.5, "ancho": 11, "unidad": "pulgadas" }, "colores": ["rojo","negro","gris"] },
+	   { "nombre": "planner", "cantidad": 75, "status": "D",
+	       "tamanio": { "alto": 22.85, "ancho": 30, "unidad": "pulgadas" }, "colores": ["blanco","rojo"] },
+	   { "nombre": "postcard", "cantidad": 45, "status": "A",
+	       "tamanio": { "alto": 10, "ancho": 15.25, "unidad": "cm" }, "colores": ["azul"] }
+        ]
+    },
+    "stock_min": 60
+}
