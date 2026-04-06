@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "prestart": "bash scripts/generate_docs_docusaurus.sh",
     "start": "docusaurus start",
+    "prebuild": "bash scripts/generate_docs_docusaurus.sh",
     "build": "docusaurus build",
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
