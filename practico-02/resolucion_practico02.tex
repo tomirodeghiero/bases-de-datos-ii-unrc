@@ -1,0 +1,608 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Trabajo Práctico N.\textsuperscript{o} 2}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={NUMERIC,VARCHAR,DECIMAL,DATE,TIMESTAMP,TIME,
+        BIGINT,VARCHAR2,NUMBER,ENUM,SCHEMA,SEQUENCE,TRIGGER,
+        BEFORE,EACH,ROW,NEXTVAL,DUAL,RAISE,EXCEPTION,LOOP,
+        IDENTIFIED,QUOTA,UNLIMITED,USERS,TABLESPACE,
+        DATABASE,DOMAIN,GRANT,REVOKE,ROLE,USER,LOGIN,NOLOGIN,
+        OPTION,REFERENCES,RESTRICT,CASCADE,
+        AUTO\_INCREMENT,IF,EXISTS,ALTER,SHOW,USE,
+        SEARCH\_PATH,EXECUTE,IMMEDIATE,PROFILE,PASSWORD,EXPIRE,
+        CONNECT\_TIME,RESOURCE\_LIMIT,SYSTEM,SYSDBA,
+        MAX\_CONNECTIONS\_PER\_HOUR,MAX\_QUERIES\_PER\_HOUR,
+        WITH,FROM,TO,ON,AS,AND,OR,IN,IS,NOT,NULL,
+        INSERT,UPDATE,DELETE,SELECT},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstset{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+% --- Comandos auxiliares ---
+\newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+
+\title{Trabajo Práctico N.\textsuperscript{o} 2: DCL\\[4pt]
+       \large Bases de Datos II}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Trabajo Práctico N.\textsuperscript{o} 2}}\\[6pt]
+    {\large DCL: usuarios, roles y privilegios}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+\end{titlepage}
+
+% =====================================================
+% Índice
+% =====================================================
+\tableofcontents
+\newpage
+
+% =====================================================
+% Introducción
+% =====================================================
+\section{Introducción}
+
+Este práctico aborda DCL, el subconjunto de SQL dedicado al control de acceso. La consigna se divide en cuatro ejercicios y, en conjunto, ejercita las tres operaciones centrales del subsistema de seguridad: crear usuarios y roles, otorgar privilegios y revocarlos. La cátedra exige resolver cada ejercicio en un motor específico (MySQL, PostgreSQL u Oracle), lo que también permite contrastar las diferentes formas en que cada motor implementa la seguridad: a nivel de cuenta y host en MySQL, mediante roles unificados con \texttt{LOGIN/NOLOGIN} en PostgreSQL, y con perfiles y vistas para cubrir restricciones particulares en Oracle.
+
+Las bases utilizadas son las definidas en el Práctico 1: la del inciso a) (clientes, productos, facturas) para el Ejercicio 1, la del inciso b) (vehículos, parquímetros, estacionamiento) para el Ejercicio 2 y la del inciso c) (clientes, automóviles, accidentes) para los Ejercicios 3 y 4.
+
+A lo largo del documento se priorizan dos criterios. Primero, otorgar siempre el privilegio mínimo necesario: cuando un inciso pide acceder solo a ciertas columnas, se utiliza la sintaxis a nivel de columna en lugar de un permiso amplio sobre la tabla completa. Segundo, justificar el uso (o la ausencia) de \texttt{WITH GRANT OPTION}: solo se incluye en los casos en los que el enunciado pide explícitamente que el usuario pueda delegar el privilegio.
+
+% =====================================================
+% Ejercicio 1
+% =====================================================
+\section{Ejercicio 1: Usuarios y privilegios en MySQL}
+
+Este ejercicio trabaja sobre la base \texttt{practico1a\_mysql}, definida en el Ejercicio 1.a) del Práctico 1. Hay que crear los usuarios \texttt{vendedor1}, \texttt{vendedor2} y \texttt{administrador}, otorgar los privilegios pedidos en cada inciso, verificar que quedaron bien aplicados y, al final, revocar todo lo que se le otorgó a \texttt{vendedor2}. Las decisiones de seguridad más relevantes son dos: usar \texttt{WITH GRANT OPTION} solo en \texttt{administrador} (porque el enunciado lo pide) y aplicar permisos a nivel de columna a \texttt{vendedor2} y \texttt{administrador} para acotar el alcance al mínimo necesario.
+
+\subsection{Conexión al servidor}
+
+Las operaciones de creación de usuarios y de \texttt{GRANT} requieren un usuario con privilegios de administración (típicamente \texttt{root}). El acceso desde la terminal se realiza así:
+
+\begin{lstlisting}[language=bash]
+mysql -u root -p
+\end{lstlisting}
+
+Si conviene fijar host y puerto explícitamente, se puede usar:
+
+\begin{lstlisting}[language=bash]
+mysql -h localhost -P 3306 -u root -p
+\end{lstlisting}
+
+Una vez dentro, vale la pena confirmar contra qué base se está trabajando:
+
+\begin{lstlisting}
+SHOW DATABASES;
+USE practico1a_mysql;
+SELECT DATABASE(), CURRENT_USER();
+\end{lstlisting}
+
+\subsection{Creación de usuarios}
+
+Los tres usuarios se crean con alcance \texttt{'@localhost'}, lo que tiene sentido en un escenario administrado desde la misma máquina. Las contraseñas se eligen suficientemente fuertes para cumplir con la política por defecto de MySQL 8 (\texttt{validate\_password}).
+
+\begin{lstlisting}
+CREATE USER IF NOT EXISTS 'vendedor1'@'localhost' IDENTIFIED BY 'Vendedor1_2026!';
+CREATE USER IF NOT EXISTS 'vendedor2'@'localhost' IDENTIFIED BY 'Vendedor2_2026!';
+CREATE USER IF NOT EXISTS 'administrador'@'localhost' IDENTIFIED BY 'Admin_2026!';
+\end{lstlisting}
+
+\subsection{Otorgamiento de privilegios}
+
+Cada \texttt{GRANT} traduce literalmente uno de los incisos del enunciado y se acota al mínimo necesario.
+
+\begin{lstlisting}
+-- a) vendedor1: puede INSERT en cliente, sin posibilidad de delegar.
+--    Se omite WITH GRANT OPTION justamente porque el enunciado lo prohíbe.
+GRANT INSERT ON practico1a_mysql.cliente TO 'vendedor1'@'localhost';
+
+-- b) vendedor2: INSERT en factura y SELECT de los campos de producto.
+--    Se otorga SELECT a nivel de columna en lugar de SELECT sobre toda la tabla,
+--    para reflejar exactamente el alcance pedido.
+GRANT INSERT ON practico1a_mysql.factura TO 'vendedor2'@'localhost';
+GRANT SELECT (cod_producto, descripcion, precio, stock_minimo, stock_maximo, cantidad)
+ON practico1a_mysql.producto
+TO 'vendedor2'@'localhost';
+
+-- c) administrador: UPDATE solo sobre el campo descripcion en producto.
+--    Aquí sí corresponde WITH GRANT OPTION, porque el enunciado pide
+--    que pueda delegar ese privilegio a otros usuarios.
+GRANT UPDATE (descripcion)
+ON practico1a_mysql.producto
+TO 'administrador'@'localhost'
+WITH GRANT OPTION;
+
+-- d) DELETE sobre cliente para los tres usuarios. Se otorga en una sola
+--    sentencia listando los tres beneficiarios separados por coma.
+GRANT DELETE ON practico1a_mysql.cliente
+TO 'vendedor1'@'localhost', 'vendedor2'@'localhost', 'administrador'@'localhost';
+\end{lstlisting}
+
+\subsection{Verificación de privilegios}
+
+\texttt{SHOW GRANTS} lista los permisos efectivamente registrados para cada cuenta y permite chequear de un vistazo que los \texttt{GRANT} se aplicaron como se esperaba.
+
+\begin{lstlisting}
+SHOW GRANTS FOR 'vendedor1'@'localhost';
+SHOW GRANTS FOR 'vendedor2'@'localhost';
+SHOW GRANTS FOR 'administrador'@'localhost';
+\end{lstlisting}
+
+Más allá de la verificación declarativa, conviene probar el comportamiento real ingresando con cada usuario:
+
+\begin{itemize}
+    \item \texttt{vendedor1}: el \texttt{INSERT} sobre \texttt{cliente} y el \texttt{DELETE} sobre \texttt{cliente} deberían funcionar; cualquier intento de \texttt{GRANT INSERT ON practico1a\_mysql.cliente TO ...} debe fallar, justamente porque no se otorgó \texttt{GRANT OPTION}.
+    \item \texttt{vendedor2}: el \texttt{INSERT} sobre \texttt{factura}, el \texttt{SELECT} sobre los campos permitidos de \texttt{producto} y el \texttt{DELETE} sobre \texttt{cliente} deberían ejecutarse sin problemas.
+    \item \texttt{administrador}: el \texttt{UPDATE} del campo \texttt{descripcion} en \texttt{producto} debe funcionar y, como tiene \texttt{WITH GRANT OPTION}, también puede correr un \texttt{GRANT UPDATE (descripcion) ON ... TO ...} hacia otro usuario.
+\end{itemize}
+
+\subsection{Revocación de privilegios de \texttt{vendedor2}}
+
+El último inciso pide retirar todos los permisos de \texttt{vendedor2}. La forma más directa en MySQL es combinar \texttt{ALL PRIVILEGES} con \texttt{GRANT OPTION} en un único \texttt{REVOKE}.
+
+\begin{lstlisting}
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'vendedor2'@'localhost';
+SHOW GRANTS FOR 'vendedor2'@'localhost';
+\end{lstlisting}
+
+Tras el \texttt{REVOKE}, el \texttt{SHOW GRANTS} debería devolver únicamente \texttt{USAGE}. Conviene aclarar que \texttt{USAGE} no es un privilegio sobre objetos: indica simplemente que la cuenta sigue existiendo y puede conectarse, pero ya no puede operar sobre ninguna tabla.
+
+% =====================================================
+% Ejercicio 2
+% =====================================================
+\section{Ejercicio 2: Conexión por host y límites de recursos}
+
+Este ejercicio se resuelve sobre la base \texttt{practico1b\_mysql}, definida en el inciso b) del Práctico 1. Lo característico de este caso, además de los privilegios sobre tablas, es que el enunciado pide controlar desde dónde puede conectarse cada usuario y limitar el consumo de recursos del \texttt{cobrador}.
+
+El plan es crear \texttt{encargado\_estacionamiento} con acceso restringido al servidor local, dar de alta a \texttt{cobrador} con conexión desde cualquier host, otorgar a cada uno los privilegios pedidos, configurar los límites de conexiones y consultas por hora del \texttt{cobrador}, verificar que todo quedó bien aplicado y, finalmente, revocar el permiso de consulta del \texttt{cobrador}.
+
+\subsection{Creación de usuarios con alcance de host}
+
+La parte del nombre que sigue al \texttt{@} define el host desde el cual el usuario puede iniciar sesión. Eso es lo que permite restringir la conexión del \texttt{encargado\_estacionamiento} al servidor local y dejar al \texttt{cobrador} con acceso desde cualquier máquina mediante el comodín \texttt{'\%'}.
+
+\begin{lstlisting}
+-- Limpieza opcional para re-ejecutar el script de manera idempotente
+DROP USER IF EXISTS 'encargado_estacionamiento'@'localhost';
+DROP USER IF EXISTS 'cobrador'@'%';
+
+-- encargado_estacionamiento: solo se conecta desde localhost
+CREATE USER 'encargado_estacionamiento'@'localhost'
+IDENTIFIED BY 'Encargado_2026!';
+
+-- cobrador: puede conectarse desde cualquier máquina
+CREATE USER 'cobrador'@'%'
+IDENTIFIED BY 'Cobrador_2026!';
+\end{lstlisting}
+
+\subsection{Otorgamiento de privilegios y límites}
+
+Cada \texttt{GRANT} traduce un inciso del enunciado, y los límites del \texttt{cobrador} se configuran con \texttt{ALTER USER ... WITH}, que es la forma idiomática en MySQL 8 para fijar cuotas de uso por hora.
+
+\begin{lstlisting}
+-- a) cobrador: solo SELECT sobre estacionamiento
+GRANT SELECT ON practico1b_mysql.estacionamiento
+TO 'cobrador'@'%';
+
+-- Límites de recursos: 3 conexiones/hora y 10 consultas/hora.
+-- Se aplican a la cuenta, no al privilegio en particular.
+ALTER USER 'cobrador'@'%'
+WITH
+  MAX_CONNECTIONS_PER_HOUR 3
+  MAX_QUERIES_PER_HOUR 10;
+
+-- b) encargado_estacionamiento: SELECT en todas las tablas e INSERT en parquimetro.
+--    El primer GRANT usa "*" para abarcar el esquema completo, y el segundo
+--    se acota a una sola tabla.
+GRANT SELECT ON practico1b_mysql.*
+TO 'encargado_estacionamiento'@'localhost';
+
+GRANT INSERT ON practico1b_mysql.parquimetro
+TO 'encargado_estacionamiento'@'localhost';
+\end{lstlisting}
+
+\subsection{Verificación de permisos y de la configuración de cuenta}
+
+La verificación se realiza en dos planos: por un lado los privilegios efectivos sobre objetos, y por otro la configuración de la cuenta (host y límites de recursos).
+
+\begin{lstlisting}
+-- Permisos efectivos sobre objetos
+SHOW GRANTS FOR 'cobrador'@'%';
+SHOW GRANTS FOR 'encargado_estacionamiento'@'localhost';
+
+-- Definición de la cuenta: host de origen y límites declarados
+SHOW CREATE USER 'cobrador'@'%';
+SHOW CREATE USER 'encargado_estacionamiento'@'localhost';
+\end{lstlisting}
+
+La verificación se considera correcta cuando se observa lo siguiente:
+
+\begin{itemize}
+    \item \texttt{cobrador@'\%'} aparece con \texttt{SELECT} sobre \texttt{practico1b\_mysql.estacionamiento}.
+    \item \texttt{cobrador@'\%'} muestra \texttt{MAX\_CONNECTIONS\_PER\_HOUR 3} y \texttt{MAX\_QUERIES\_PER\_HOUR 10} en \texttt{SHOW CREATE USER}.
+    \item \texttt{encargado\_estacionamiento@'localhost'} figura con \texttt{SELECT} sobre \texttt{practico1b\_mysql.*} y con \texttt{INSERT} sobre \texttt{parquimetro}.
+\end{itemize}
+
+\subsection{Revocación del privilegio de consulta del \texttt{cobrador}}
+
+\begin{lstlisting}
+REVOKE SELECT ON practico1b_mysql.estacionamiento
+FROM 'cobrador'@'%';
+
+SHOW GRANTS FOR 'cobrador'@'%';
+\end{lstlisting}
+
+Tras el \texttt{REVOKE}, la cuenta del \texttt{cobrador} y sus límites de recursos siguen vigentes, pero ya no tiene acceso de lectura a \texttt{estacionamiento}. El \texttt{SHOW GRANTS} debería devolver únicamente \texttt{USAGE}, lo que confirma que el único permiso pedido en el inciso a) fue retirado correctamente.
+
+% =====================================================
+% Ejercicio 3
+% =====================================================
+\section{Ejercicio 3: Roles y herencia en PostgreSQL}
+
+Este ejercicio se trabaja en PostgreSQL sobre el esquema \texttt{practico1c} definido en el inciso c) del Práctico 1. A diferencia del primer ejercicio, acá entra en juego el modelo de roles de PostgreSQL: en este motor no existe una distinción real entre ``usuario'' y ``rol'', ya que ambos son entidades del sistema y la única diferencia operativa es si el rol puede iniciar sesión (\texttt{LOGIN}) o no (\texttt{NOLOGIN}).
+
+Esa característica permite resolver con naturalidad el pedido del enunciado: se crea un rol común \texttt{empleado} sin posibilidad de login, se le otorgan los permisos compartidos por todos los usuarios y luego se hace que \texttt{asesor}, \texttt{administrativo} y \texttt{encargado} (que sí tienen \texttt{LOGIN}) hereden de él.
+
+\subsection{Pre-chequeo del esquema}
+
+Antes de otorgar privilegios conviene confirmar que el esquema y las tablas existen:
+
+\begin{lstlisting}
+SELECT schema_name
+FROM information_schema.schemata
+WHERE schema_name = 'practico1c';
+
+SELECT tablename
+FROM pg_tables
+WHERE schemaname = 'practico1c'
+ORDER BY tablename;
+\end{lstlisting}
+
+\subsection{Creación del rol común y de los usuarios}
+
+El rol \texttt{empleado} se declara como \texttt{NOLOGIN}: no se utiliza para iniciar sesión, sino como contenedor de privilegios compartidos. Las tres cuentas que sí pueden conectarse se crean con \texttt{LOGIN} y, mediante \texttt{GRANT empleado TO ...}, heredan automáticamente lo que se otorgue al rol común.
+
+\begin{lstlisting}
+-- Limpieza opcional para re-ejecutar el script de manera segura
+DROP ROLE IF EXISTS asesor;
+DROP ROLE IF EXISTS administrativo;
+DROP ROLE IF EXISTS encargado;
+DROP ROLE IF EXISTS empleado;
+
+-- Rol común sin posibilidad de iniciar sesión
+CREATE ROLE empleado NOLOGIN;
+
+-- Usuarios reales: roles con LOGIN y contraseña
+CREATE ROLE asesor LOGIN PASSWORD 'Asesor_2026!';
+CREATE ROLE administrativo LOGIN PASSWORD 'Administrativo_2026!';
+CREATE ROLE encargado LOGIN PASSWORD 'Encargado_2026!';
+
+-- Inciso a): todos los usuarios pertenecen al rol empleado
+GRANT empleado TO asesor, administrativo, encargado;
+\end{lstlisting}
+
+\subsection{Otorgamiento de privilegios}
+
+Los privilegios se otorgan en el orden lógico del enunciado. Lo común a todos se asigna al rol \texttt{empleado}; lo específico se otorga directamente a cada usuario, que igual mantiene la herencia del rol.
+
+\begin{lstlisting}
+-- a) empleado: SELECT a nivel de columnas (apellido, nombre) en cliente.
+GRANT SELECT (apellido, nombre)
+ON practico1c.cliente
+TO empleado;
+
+-- b) asesor: además de empleado, puede consultar taller e insertar en accidente.
+GRANT SELECT ON practico1c.taller TO asesor;
+GRANT INSERT ON practico1c.accidente TO asesor;
+
+-- c) administrativo: SELECT sobre la tabla automovil.
+GRANT SELECT ON practico1c.automovil TO administrativo;
+
+-- d) encargado: DELETE sobre todas las tablas y UPDATE solo de la columna tasa
+--    en categoria. ALL TABLES IN SCHEMA es un atajo cómodo para no listar
+--    tabla por tabla.
+GRANT DELETE ON ALL TABLES IN SCHEMA practico1c TO encargado;
+GRANT UPDATE (tasa) ON practico1c.categoria TO encargado;
+\end{lstlisting}
+
+\subsection{Comprobación de permisos}
+
+PostgreSQL no tiene un único \texttt{SHOW GRANTS} como MySQL, así que la verificación se arma combinando varias consultas al diccionario y funciones del estilo \texttt{has\_table\_privilege} y \texttt{has\_column\_privilege}. La idea es chequear tres cosas: que los roles existen y pueden iniciar sesión cuando corresponde, que la membresía al rol \texttt{empleado} quedó bien establecida, y que cada privilegio puntual está efectivamente otorgado.
+
+\begin{lstlisting}
+-- roles y capacidad de login
+SELECT rolname, rolcanlogin
+FROM pg_roles
+WHERE rolname IN ('empleado', 'asesor', 'administrativo', 'encargado')
+ORDER BY rolname;
+
+-- membresía al rol empleado
+SELECT r.rolname AS role, m.rolname AS member
+FROM pg_auth_members am
+JOIN pg_roles r ON r.oid = am.roleid
+JOIN pg_roles m ON m.oid = am.member
+WHERE r.rolname = 'empleado'
+ORDER BY m.rolname;
+
+-- permisos por tabla
+SELECT grantee, table_name, privilege_type
+FROM information_schema.role_table_grants
+WHERE table_schema = 'practico1c'
+  AND grantee IN ('empleado', 'asesor', 'administrativo', 'encargado')
+ORDER BY grantee, table_name, privilege_type;
+
+-- permisos por columna
+SELECT grantee, table_name, column_name, privilege_type
+FROM information_schema.column_privileges
+WHERE table_schema = 'practico1c'
+  AND grantee IN ('empleado', 'encargado')
+  AND (
+    (table_name = 'cliente' AND column_name IN ('apellido', 'nombre'))
+    OR
+    (table_name = 'categoria' AND column_name = 'tasa')
+  )
+ORDER BY grantee, table_name, column_name;
+
+-- chequeo puntual con funciones de privilegios
+SELECT
+  has_table_privilege('asesor', 'practico1c.taller', 'SELECT')                AS asesor_select_taller,
+  has_table_privilege('asesor', 'practico1c.accidente', 'INSERT')             AS asesor_insert_accidente,
+  has_table_privilege('administrativo', 'practico1c.automovil', 'SELECT')     AS administrativo_select_automovil,
+  has_table_privilege('encargado', 'practico1c.cliente', 'DELETE')            AS encargado_delete_cliente,
+  has_column_privilege('encargado', 'practico1c.categoria', 'tasa', 'UPDATE') AS encargado_update_tasa,
+  has_column_privilege('asesor', 'practico1c.cliente', 'apellido', 'SELECT')  AS asesor_select_apellido_via_empleado,
+  has_column_privilege('administrativo', 'practico1c.cliente', 'nombre', 'SELECT') AS administrativo_select_nombre_via_empleado;
+\end{lstlisting}
+
+\subsection{Resultado esperado por inciso}
+
+\begin{itemize}
+    \item \texttt{empleado}: \texttt{SELECT(apellido, nombre)} sobre \texttt{practico1c.cliente}; todo lo demás se hereda hacia los tres usuarios.
+    \item \texttt{asesor}: lo heredado de \texttt{empleado} más \texttt{SELECT} sobre \texttt{practico1c.taller} e \texttt{INSERT} sobre \texttt{practico1c.accidente}.
+    \item \texttt{administrativo}: lo heredado de \texttt{empleado} más \texttt{SELECT} sobre \texttt{practico1c.automovil}.
+    \item \texttt{encargado}: lo heredado de \texttt{empleado} más \texttt{DELETE} sobre todas las tablas del esquema y \texttt{UPDATE(tasa)} sobre \texttt{practico1c.categoria}.
+\end{itemize}
+
+% =====================================================
+% Ejercicio 4
+% =====================================================
+\section{Ejercicio 4: Perfiles, vistas y delegación en Oracle}
+
+Este ejercicio se resuelve sobre el esquema \texttt{PRACTICO1C} (el del inciso c) del Práctico 1) y trabaja específicamente con las particularidades del modelo de seguridad de Oracle. Hay que crear los usuarios \texttt{empleado1}, \texttt{empleado2} y \texttt{director}, dar de alta el rol \texttt{empleados} y asignárselo a los dos primeros, otorgar los privilegios sobre objetos pedidos en cada inciso, forzar a \texttt{empleado1} a renovar su contraseña en el primer inicio de sesión y limitar a \texttt{director} a un máximo de 20 minutos de conexión continua. Esto último se logra con un \texttt{PROFILE} de Oracle, mecanismo específico del motor para imponer restricciones sobre recursos y contraseñas.
+
+\subsection{Nota sobre Oracle y privilegios por columna}
+
+A diferencia de MySQL o PostgreSQL, Oracle no admite \texttt{GRANT SELECT(col1, col2, ...)} directamente sobre una tabla. Para cumplir el pedido del inciso de \texttt{empleado2} (consultar \texttt{apellido}, \texttt{nombre} y \texttt{direccion} de \texttt{cliente} y poder delegar ese privilegio), se crea una vista con exactamente esas columnas y se otorga \texttt{SELECT ... WITH GRANT OPTION} sobre la vista. Es la solución idiomática en Oracle: la vista actúa como una proyección controlada de la tabla y el \texttt{WITH GRANT OPTION} queda acotado a esa proyección.
+
+\subsection{Bloque de administración (conexión como SYS)}
+
+La parte de creación de usuarios, roles y perfiles se ejecuta con privilegios de administrador, así que se ingresa por \texttt{sqlplus} como \texttt{SYSDBA}. La instrucción \texttt{ALTER SYSTEM SET RESOURCE\_LIMIT = TRUE} es necesaria para que Oracle aplique los límites declarados en los perfiles.
+
+\begin{lstlisting}
+-- sqlplus / as sysdba
+
+-- Habilitar la aplicación de límites de recursos definidos en los perfiles.
+-- Sin esta línea, CONNECT_TIME no surte efecto sobre director.
+ALTER SYSTEM SET RESOURCE_LIMIT = TRUE;
+
+-- Creación de los tres usuarios. Se les asigna tablespace por defecto y temporal,
+-- más una cuota mínima en USERS por si llegan a crear objetos propios.
+CREATE USER empleado1 IDENTIFIED BY "Empleado1_2026!"
+  DEFAULT TABLESPACE users
+  TEMPORARY TABLESPACE temp
+  QUOTA 5M ON users;
+
+CREATE USER empleado2 IDENTIFIED BY "Empleado2_2026!"
+  DEFAULT TABLESPACE users
+  TEMPORARY TABLESPACE temp
+  QUOTA 5M ON users;
+
+CREATE USER director IDENTIFIED BY "Director_2026!"
+  DEFAULT TABLESPACE users
+  TEMPORARY TABLESPACE temp
+  QUOTA 5M ON users;
+
+-- Rol que agrupa los privilegios comunes a empleado1 y empleado2.
+CREATE ROLE empleados;
+
+-- Privilegio de sistema necesario para iniciar sesión: sin CREATE SESSION
+-- la cuenta existe pero no puede conectarse al motor.
+GRANT CREATE SESSION TO empleado1, empleado2, director;
+
+-- Asignación del rol a los dos empleados (director queda fuera).
+GRANT empleados TO empleado1, empleado2;
+
+-- Para forzar a empleado1 a renovar su contraseña en el primer login,
+-- se marca la actual como expirada.
+ALTER USER empleado1 PASSWORD EXPIRE;
+
+-- Perfil que limita a 20 minutos el tiempo total de conexión continua.
+-- En Oracle, CONNECT_TIME se mide en minutos.
+CREATE PROFILE director_profile LIMIT
+  CONNECT_TIME 20;
+
+ALTER USER director PROFILE director_profile;
+\end{lstlisting}
+
+\subsection{Bloque de privilegios sobre objetos (conexión como PRACTICO1C)}
+
+Los \texttt{GRANT} sobre tablas y vistas deben ejecutarse desde el dueño del esquema, ya que es quien tiene autoridad para entregar privilegios sobre sus propios objetos. Por eso se cambia de sesión al usuario \texttt{PRACTICO1C}.
+
+\begin{lstlisting}
+-- sqlplus practico1c/practico1c
+
+-- El rol empleados consulta AUTOMOVIL y CATEGORIA. Como el rol ya está asignado
+-- a empleado1 y empleado2, el privilegio se hereda automáticamente a ambos.
+GRANT SELECT ON automovil TO empleados;
+GRANT SELECT ON categoria TO empleados;
+
+-- director debe poder consultar todas las tablas del esquema. Para no listarlas
+-- a mano, se itera sobre user_tables y se otorga SELECT dinámicamente.
+BEGIN
+  FOR t IN (SELECT table_name FROM user_tables) LOOP
+    EXECUTE IMMEDIATE 'GRANT SELECT ON ' || t.table_name || ' TO director';
+  END LOOP;
+END;
+/
+
+-- empleado1: privilegios DML completos sobre accidente.
+GRANT INSERT, UPDATE, DELETE ON accidente TO empleado1;
+
+-- empleado2: vista que expone exactamente apellido, nombre y direccion de cliente.
+-- Después se otorga SELECT sobre la vista con WITH GRANT OPTION para que pueda
+-- delegar el privilegio, tal como pide el enunciado.
+CREATE OR REPLACE VIEW vw_cliente_datos AS
+SELECT apellido, nombre, direccion
+FROM cliente;
+
+GRANT SELECT ON vw_cliente_datos TO empleado2 WITH GRANT OPTION;
+\end{lstlisting}
+
+\subsection{Verificación}
+
+La verificación se hace combinando varias vistas del diccionario de Oracle. Cada una mira un aspecto puntual: existencia de usuarios y rol, membresía al rol, privilegios directos sobre objetos, capacidad de delegar y configuración del perfil de \texttt{director}.
+
+\begin{lstlisting}
+-- Usuarios creados
+SELECT username, account_status, profile
+FROM dba_users
+WHERE username IN ('EMPLEADO1', 'EMPLEADO2', 'DIRECTOR')
+ORDER BY username;
+
+-- Rol empleados creado
+SELECT role
+FROM dba_roles
+WHERE role = 'EMPLEADOS';
+
+-- Membresía del rol
+SELECT grantee, granted_role
+FROM dba_role_privs
+WHERE grantee IN ('EMPLEADO1', 'EMPLEADO2', 'DIRECTOR')
+ORDER BY grantee, granted_role;
+
+-- Privilegios del rol empleados
+SELECT grantee, owner, table_name, privilege
+FROM dba_tab_privs
+WHERE grantee = 'EMPLEADOS'
+  AND owner = 'PRACTICO1C'
+ORDER BY table_name, privilege;
+
+-- Privilegios directos de empleado1 y director
+SELECT grantee, owner, table_name, privilege
+FROM dba_tab_privs
+WHERE grantee IN ('EMPLEADO1', 'DIRECTOR')
+  AND owner = 'PRACTICO1C'
+ORDER BY grantee, table_name, privilege;
+
+-- Vista para empleado2 y capacidad de delegar
+SELECT grantee, owner, table_name, privilege, grantable
+FROM dba_tab_privs
+WHERE grantee = 'EMPLEADO2'
+  AND owner = 'PRACTICO1C'
+  AND table_name = 'VW_CLIENTE_DATOS';
+
+-- Configuración del perfil de director
+SELECT profile, resource_name, limit
+FROM dba_profiles
+WHERE profile = 'DIRECTOR_PROFILE'
+  AND resource_name = 'CONNECT_TIME';
+\end{lstlisting}
+
+\subsection{Resultado esperado por inciso}
+
+A modo de resumen, después de ejecutar todos los bloques anteriores se debería observar lo siguiente:
+
+\begin{itemize}
+    \item \texttt{empleado1} y \texttt{empleado2} aparecen con el rol \texttt{empleados} asignado.
+    \item El rol \texttt{empleados} tiene \texttt{SELECT} sobre \texttt{AUTOMOVIL} y \texttt{CATEGORIA}, privilegios que se heredan a ambos usuarios.
+    \item \texttt{empleado1} cuenta con \texttt{INSERT}, \texttt{UPDATE} y \texttt{DELETE} directos sobre \texttt{ACCIDENTE}, y su contraseña queda como \texttt{EXPIRED}, forzando el cambio en el primer ingreso.
+    \item \texttt{empleado2} tiene \texttt{SELECT} sobre \texttt{VW\_CLIENTE\_DATOS} (apellido, nombre, dirección) con \texttt{GRANTABLE = YES}, lo que confirma la posibilidad de delegar.
+    \item \texttt{director} queda con \texttt{SELECT} sobre todas las tablas del esquema \texttt{PRACTICO1C} y con el perfil \texttt{DIRECTOR\_PROFILE}, donde \texttt{CONNECT\_TIME = 20}.
+\end{itemize}
+
+% =====================================================
+% Conclusión
+% =====================================================
+\section{Conclusión}
+
+El práctico permitió ejercitar el control de accesos en tres motores con modelos de seguridad bastante distintos. En MySQL, la identidad del usuario se forma con el par \texttt{usuario@host} y los privilegios pueden afinarse a nivel de columna; los límites de recursos por hora se gestionan directamente sobre la cuenta con \texttt{ALTER USER ... WITH}. En PostgreSQL, ``usuarios'' y ``roles'' son la misma cosa, y la herencia entre roles permite agrupar permisos comunes en un único contenedor, lo que simplifica la administración. En Oracle, en cambio, hay que apoyarse en perfiles para limitar recursos como el tiempo de conexión y, ante la falta de \texttt{GRANT SELECT(col)} sobre tablas, recurrir a vistas para acotar la visibilidad de columnas.
+
+Más allá de las diferencias entre motores, el ejercicio refuerza dos principios generales de seguridad: otorgar el privilegio mínimo necesario y delegar (con \texttt{WITH GRANT OPTION}) solo cuando hay una razón explícita para hacerlo. Las verificaciones con \texttt{SHOW GRANTS}, las vistas \texttt{information\_schema} y \texttt{pg\_*} en PostgreSQL y las vistas \texttt{DBA\_*} en Oracle resultaron fundamentales para validar que los \texttt{GRANT} y \texttt{REVOKE} produjeron el efecto esperado.
+
+\end{document}

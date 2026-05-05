@@ -1,17 +1,18 @@
 # Ejercicio 1
 
-`CREATE TABLE` es el comando central para definir tablas y que las restricciones relevantes para este practico son `PRIMARY KEY`, `UNIQUE`, `CHECK` y `FOREIGN KEY`. Asimismo, los dominios se pueden modelar con `CREATE DOMAIN`, aunque eso depende del motor.
+El núcleo de este ejercicio es el DDL: definir las tablas con `CREATE TABLE` y declarar las restricciones que el enunciado pide explícita o implícitamente. Las cláusulas más relevantes son `PRIMARY KEY`, `UNIQUE`, `CHECK` y `FOREIGN KEY`, mientras que la noción de dominio se puede expresar con `CREATE DOMAIN` cuando el motor lo soporta y, en caso contrario, emularse con `CHECK` o tipos enumerados. Cada inciso se resuelve en los motores que indica el enunciado y se conserva un mismo conjunto de decisiones de modelado para que las versiones sean comparables.
 
 ## Inciso a
 
 ### Decisiones de modelado
 
-- `cliente.nro_cliente` es la clave primaria.
-- `cliente.telefono` lo tomo como clave secundaria razonable (`UNIQUE`).
-- `factura.nro_cliente` referencia a `cliente`.
-- `item_factura` usa clave primaria compuesta `(cod_producto, nro_factura)`.
-- Al borrar un cliente, sus facturas deben borrarse en cascada; para que no queden items huerfanos, `item_factura.nro_factura` tambien va con `ON DELETE CASCADE`.
-- Al borrar un producto usado en una factura, la operacion debe fallar; por eso `item_factura.cod_producto` queda con comportamiento restrictivo.
+- `cliente.nro_cliente`, `producto.cod_producto` y `factura.nro_factura` son las claves primarias naturales del enunciado.
+- Se agrega `UNIQUE` sobre `cliente.telefono`, ya que en este dominio no es razonable que dos clientes distintos compartan teléfono. El enunciado no lo pide explícitamente, pero funciona como clave secundaria realista.
+- `factura.nro_cliente` se declara como clave foránea hacia `cliente`, lo que cierra la relación 1:N entre clientes y facturas.
+- `item_factura` se modela con clave primaria compuesta `(cod_producto, nro_factura)`, una elección típica en tablas de detalle: cada par (producto, factura) aparece una sola vez.
+- El enunciado pide que al borrar un cliente se elimine toda su información de facturas. Para cumplirlo, `factura.nro_cliente` se define con `ON DELETE CASCADE`. Como además los ítems quedarían huérfanos si la factura desaparece, `item_factura.nro_factura` también se propaga con `ON DELETE CASCADE`.
+- En cambio, no se debe permitir borrar un producto que ya fue facturado. Por eso `item_factura.cod_producto` se declara con `ON DELETE RESTRICT`, que es justamente el comportamiento que aborta la operación si existen referencias.
+- Las restricciones de dominio se traducen en `CHECK`: precio estrictamente positivo, stock mínimo y máximo no negativos y, sobre todo, `stock_minimo <= stock_maximo` para garantizar la consistencia lógica que pide el enunciado.
 
 ### MySQL 8+
 
@@ -74,9 +75,9 @@ CREATE TABLE item_factura (
 
 #### Carga de datos
 
-Los `INSERT` de este inciso quedaron centralizados en `ejercicio-02/README.md`, porque ese es el ejercicio dedicado a poblar las tablas.
+Los `INSERT` correspondientes a este inciso se concentran en `ejercicio-02/README.md`, que es el ejercicio dedicado específicamente a poblar las tablas. La separación evita duplicar el código y deja claro qué pertenece al DDL y qué al DML.
 
-#### Show de las tablas
+#### Verificación rápida del esquema
 
 ```sql
 SHOW TABLES;
@@ -89,9 +90,7 @@ SELECT * FROM item_factura;
 
 #### Comentario breve
 
-- El ejercicio 1 queda enfocado en la estructura: tablas, claves y restricciones.
-- La carga de datos se ejecuta desde el ejercicio 2 para no duplicar `INSERT`.
-- Despues de correr esos `INSERT`, estas consultas sirven para verificar que todo quedo creado y poblado correctamente.
+Este inciso se concentra solo en la estructura: tablas, claves primarias y foráneas, restricciones de dominio y reglas de borrado. Una vez ejecutados los `INSERT` del ejercicio 2, las consultas de arriba alcanzan para confirmar que las tablas existen, que las relaciones están bien declaradas y que las filas insertadas respetan todas las restricciones definidas.
 
 ### PostgreSQL 14+
 
@@ -154,9 +153,9 @@ CREATE TABLE item_factura (
 
 #### Carga de datos
 
-Los `INSERT` de este inciso quedaron centralizados en `ejercicio-02/README.md`, porque ese es el ejercicio dedicado a poblar las tablas.
+Igual que en MySQL, los `INSERT` de este inciso se concentran en `ejercicio-02/README.md`. El DDL queda autocontenido y los datos se cargan en un único lugar.
 
-#### Show de las tablas
+#### Verificación rápida del esquema
 
 ```sql
 SELECT tablename
@@ -172,21 +171,19 @@ SELECT * FROM practico1a.item_factura;
 
 #### Comentario breve
 
-- Mantengo separada la definicion de estructura respecto de la carga de datos.
-- Consulto `pg_tables` porque en PostgreSQL el equivalente practico a "show tables" depende del esquema.
-- Una vez ejecutados los `INSERT` del ejercicio 2, estas consultas permiten controlar rapido PK, FK y restricciones.
+PostgreSQL no expone un comando equivalente directo a `SHOW TABLES`, así que la lista de tablas del esquema se obtiene consultando `pg_tables`. Una vez corridos los `INSERT` del ejercicio 2, los `SELECT` de arriba alcanzan para verificar que las claves primarias y foráneas se respetan y que las restricciones de dominio están funcionando como se esperaba.
 
 ## Inciso b
 
 ### Decisiones de modelado
 
-- `vehiculo.patente`, `persona.dni` y `parquimetro.id_parquimetro` son claves primarias.
-- `duenio` se modela como tabla intermedia con clave primaria compuesta `(patente, dni)`.
-- Tomo `(calle, altura)` como clave secundaria razonable del parquimetro.
-- El dominio `nombre_y_apellido VARCHAR(45)` se emula a nivel de columna, porque ni MySQL ni Oracle implementan `CREATE DOMAIN` del estandar en este caso.
-- El dominio de color queda limitado a `{gris, negro, azul}`.
-- No se permite borrar un vehiculo si aparece en `estacionamiento`; por eso esa FK no tiene borrado en cascada.
-- El `id_estacionamiento` debe ser autonumerado: `AUTO_INCREMENT` en MySQL, `SEQUENCE + TRIGGER` en Oracle 11g/XE.
+- `vehiculo.patente`, `persona.dni` y `parquimetro.id_parquimetro` son las claves primarias naturales del problema.
+- La relación N:N entre vehículos y personas (un vehículo puede tener varios dueños y una persona puede ser dueña de varios vehículos) se resuelve con `duenio` como tabla intermedia, usando `(patente, dni)` como clave primaria compuesta.
+- Para `parquimetro` se agrega `UNIQUE (calle, altura)`. La idea es razonable desde el dominio: no tiene sentido que dos parquímetros distintos compartan exactamente la misma ubicación.
+- El dominio `nombre_y_apellido VARCHAR(45)` se emula a nivel de columna, ya que ni MySQL ni Oracle implementan `CREATE DOMAIN` del estándar SQL. En la práctica, tipo + `CHECK` cubren la misma necesidad.
+- El dominio del atributo `color` queda restringido al conjunto `{gris, negro, azul}`. En MySQL se aprovecha `ENUM`, mientras que en Oracle se utiliza un `CHECK` con `IN (...)`.
+- El enunciado pide que no se pueda borrar un vehículo que ya fue estacionado. Para reflejarlo, la FK desde `estacionamiento` hacia `vehiculo` se deja sin `ON DELETE CASCADE`: con el comportamiento por defecto (`RESTRICT` / `NO ACTION`) la eliminación falla mientras existan estacionamientos asociados.
+- El `id_estacionamiento` debe ser autonumerado. En MySQL se resuelve con `AUTO_INCREMENT`; en Oracle 10g/11g XE, donde aún no existe `IDENTITY`, se combina una `SEQUENCE` con un trigger `BEFORE INSERT` que asigna el próximo valor cuando la columna llega vacía.
 
 ### MySQL 8+
 
@@ -254,9 +251,9 @@ CREATE TABLE estacionamiento (
 
 #### Carga de datos
 
-Los `INSERT` de este inciso quedaron centralizados en `ejercicio-02/README.md`, porque ese es el ejercicio dedicado a poblar las tablas.
+Los `INSERT` de este inciso se centralizan en `ejercicio-02/README.md`. Esa separación deja a la vista en este archivo solo la estructura y las restricciones.
 
-#### Show de las tablas
+#### Verificación rápida del esquema
 
 ```sql
 SHOW TABLES;
@@ -270,13 +267,11 @@ SELECT * FROM estacionamiento;
 
 #### Comentario breve
 
-- El ejercicio 1 define solo la estructura y las reglas del modelo.
-- La carga queda en el ejercicio 2 para evitar repetir datos en dos lugares.
-- Despues de poblar, estas consultas muestran rapido si el autonumerado y las FK quedaron funcionando.
+Una vez ejecutadas las inserciones del ejercicio 2, estas consultas permiten verificar dos cosas en simultáneo: que el `AUTO_INCREMENT` del `id_estacionamiento` se completa solo y que las claves foráneas vinculan correctamente vehículos, personas y parquímetros.
 
 ### Oracle XE 10g/11g
 
-Primero, conectado como un usuario administrador:
+En Oracle no existe el concepto de "base de datos" tal como aparece en MySQL o PostgreSQL: el equivalente práctico es crear un usuario que oficie de esquema dueño de las tablas. Por eso, el primer paso es conectarse como un usuario administrador (por ejemplo `SYSTEM`) y crear el usuario que va a alojar la estructura, junto con los privilegios mínimos para poder operar:
 
 ```sql
 CREATE USER practico1b IDENTIFIED BY practico1b;
@@ -284,7 +279,7 @@ GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE, CREATE TRIGGER TO practico1
 ALTER USER practico1b QUOTA UNLIMITED ON USERS;
 ```
 
-Luego, conectado como `practico1b`:
+Una vez creado el esquema, ya conectado como `practico1b`, se ejecuta el DDL:
 
 ```sql
 CREATE TABLE persona (
@@ -361,9 +356,9 @@ END;
 
 #### Carga de datos
 
-Los `INSERT` de este inciso quedaron centralizados en `ejercicio-02/README.md`, porque ese es el ejercicio dedicado a poblar las tablas.
+Como en los otros motores, las inserciones de este inciso se centralizan en `ejercicio-02/README.md`.
 
-#### Show de las tablas
+#### Verificación rápida del esquema
 
 ```sql
 SELECT table_name
@@ -379,19 +374,17 @@ SELECT * FROM estacionamiento;
 
 #### Comentario breve
 
-- En Oracle conviene mantener esta separacion entre DDL y carga para ejecutar por bloques.
-- El trigger y la secuencia se validan despues de correr los `INSERT` del ejercicio 2.
-- Consulto `user_tables` porque es la forma mas directa de listar tablas del esquema actual.
+`user_tables` es la vista del diccionario que lista las tablas del esquema actual; en Oracle es la alternativa más directa al `SHOW TABLES` de MySQL. Una vez corridos los `INSERT` del ejercicio 2 conviene revisar específicamente que el trigger asigne el `id_estacionamiento` y que la FK hacia `vehiculo` impida borrar autos ya estacionados.
 
 ## Inciso c
 
 ### Decisiones de modelado
 
-- `cliente.dni`, `automovil.patente`, `categoria.nro_categoria`, `taller.nro_taller` y `accidente.nro_accidente` son claves primarias.
-- El enunciado explicita las FK de `accidente`, pero tambien infiero `automovil.dni -> cliente(dni)` y `automovil.nro_categoria -> categoria(nro_categoria)` porque estan implicitas en el esquema.
-- Para que borrar un cliente no deje autos huerfanos, `automovil.dni` queda con `ON DELETE CASCADE`.
-- Para cumplir la condicion del enunciado, `accidente.dni` tambien queda con `ON DELETE CASCADE`.
-- No agrego `UNIQUE` extra porque el inciso no define claramente otra clave candidata natural.
+- `cliente.dni`, `automovil.patente`, `categoria.nro_categoria`, `taller.nro_taller` y `accidente.nro_accidente` se toman como claves primarias siguiendo la subrayado del esquema del enunciado.
+- El enunciado declara explícitamente las FK de `accidente`, pero el esquema deja implícitas otras dos: `automovil.dni → cliente(dni)` y `automovil.nro_categoria → categoria(nro_categoria)`. Ambas se incluyen porque cierran la integridad referencial del modelo.
+- El enunciado pide que al borrar un cliente se elimine toda la información de los accidentes que lo involucran. Para que esa eliminación no falle por integridad referencial, también se propaga la cascada en `automovil.dni` (un cliente que se va se lleva sus autos) y, en consecuencia, en `accidente.dni`. Así una sola sentencia `DELETE` sobre `cliente` deja todo limpio.
+- Las restricciones de dominio se traducen en `CHECK`: `modelo BETWEEN 1990 AND 2015`, `marca IN ('FIAT', 'RENAULT', 'FORD')` y `tarifa > 0 AND tarifa < 10000`, tal como lo exige el enunciado.
+- No se agrega `UNIQUE` adicional porque el inciso no sugiere otra clave candidata natural más allá de las primarias.
 
 ### PostgreSQL 14+
 
@@ -461,9 +454,9 @@ CREATE TABLE accidente (
 
 #### Carga de datos
 
-Los `INSERT` de este inciso quedaron centralizados en `ejercicio-02/README.md`, porque ese es el ejercicio dedicado a poblar las tablas.
+Las inserciones de este inciso están centralizadas en `ejercicio-02/README.md` y se reutilizan tal cual desde las consultas del ejercicio 3.
 
-#### Show de las tablas
+#### Verificación rápida del esquema
 
 ```sql
 SELECT tablename
@@ -480,13 +473,11 @@ SELECT * FROM practico1c.accidente;
 
 #### Comentario breve
 
-- El ejercicio 1 se concentra en modelar correctamente claves, dominios y relaciones.
-- La carga queda en el ejercicio 2 para reutilizarla luego en las consultas del ejercicio 3.
-- Estas consultas de verificacion sirven para revisar rapido el contenido ya cargado.
+El foco del DDL acá está en respetar los dominios (modelo dentro de un rango, marca dentro de un conjunto cerrado, tarifa acotada) y en propagar la eliminación correctamente. Después de cargar los datos del ejercicio 2, los `SELECT` de arriba alcanzan para confirmar que las tablas quedaron pobladas y que las cascadas hacen lo que se espera al hacer pruebas puntuales de borrado.
 
 ### Oracle XE 10g/11g
 
-Primero, conectado como un usuario administrador:
+Como en el inciso b, en Oracle la "base" se materializa creando un usuario propietario del esquema. Conectado como administrador:
 
 ```sql
 CREATE USER practico1c IDENTIFIED BY practico1c;
@@ -494,7 +485,7 @@ GRANT CREATE SESSION, CREATE TABLE TO practico1c;
 ALTER USER practico1c QUOTA UNLIMITED ON USERS;
 ```
 
-Luego, conectado como `practico1c`:
+Y luego, ya como `practico1c`, se ejecuta el DDL:
 
 ```sql
 CREATE TABLE cliente (
@@ -559,9 +550,9 @@ CREATE TABLE accidente (
 
 #### Carga de datos
 
-Los `INSERT` de este inciso quedaron centralizados en `ejercicio-02/README.md`, porque ese es el ejercicio dedicado a poblar las tablas.
+Las inserciones se mantienen en `ejercicio-02/README.md`, igual que en el resto del práctico.
 
-#### Show de las tablas
+#### Verificación rápida del esquema
 
 ```sql
 SELECT table_name
@@ -577,6 +568,4 @@ SELECT * FROM accidente;
 
 #### Comentario breve
 
-- Mantengo el DDL separado de la carga para que el script Oracle sea mas ordenado.
-- Uso `user_tables` para listar las tablas visibles del usuario actual.
-- Despues de ejecutar los `INSERT` del ejercicio 2, estas consultas permiten comprobar relaciones y restricciones.
+Mantener separados el DDL y los `INSERT` ayuda especialmente en Oracle, donde es habitual ejecutar los scripts por bloques desde `sqlplus`. Una vez poblada la base, conviene aprovechar los `SELECT` para confirmar tanto el contenido cargado como el correcto funcionamiento de los `CHECK` y de las cascadas declaradas.

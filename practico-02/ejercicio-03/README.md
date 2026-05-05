@@ -2,11 +2,13 @@
 
 ## Ejercicio 3 (PostgreSQL 15+)
 
-Base usada: esquema `practico1c` (inciso c del práctico 1: `cliente`, `categoria`, `taller`, `automovil`, `accidente`).
+Este ejercicio se trabaja en PostgreSQL sobre el esquema `practico1c` definido en el inciso c del práctico 1 (`cliente`, `categoria`, `taller`, `automovil`, `accidente`). A diferencia del primer ejercicio, acá entra en juego el modelo de roles de PostgreSQL: en este motor no existe una distinción real entre "usuario" y "rol", ya que ambos son entidades del sistema y la única diferencia operativa es si el rol puede iniciar sesión (`LOGIN`) o no.
 
-Objetivo: crear los usuarios `asesor`, `administrativo` y `encargado`, asignarlos al rol `empleado`, y otorgar los privilegios pedidos.
+Esta característica permite resolver con naturalidad el pedido del enunciado: se crea un rol común `empleado` sin posibilidad de login, se le otorgan los permisos compartidos por todos los usuarios y luego se hace que `asesor`, `administrativo` y `encargado` (que sí tienen `LOGIN`) hereden de él.
 
-### Pre-chequeo (antes de grants)
+### Pre-chequeo (antes de los grants)
+
+Antes de otorgar privilegios conviene confirmar que el esquema y las tablas existen:
 
 ```sql
 SELECT schema_name
@@ -19,50 +21,59 @@ WHERE schemaname = 'practico1c'
 ORDER BY tablename;
 ```
 
-Si no aparece `practico1c`, primero crear la estructura del práctico 1 inciso c (PostgreSQL).
+Si el esquema `practico1c` no aparece, hay que crear primero la estructura del práctico 1 inciso c en PostgreSQL.
 
-### 1) Crear rol común y usuarios
+### 1) Crear el rol común y los usuarios
+
+El rol `empleado` se declara como `NOLOGIN`: no se usa para iniciar sesión, sino como contenedor de privilegios compartidos. Las tres cuentas que sí pueden conectarse (`asesor`, `administrativo`, `encargado`) se crean con `LOGIN` y, mediante `GRANT empleado TO ...`, heredan automáticamente lo que se otorgue al rol común.
 
 ```sql
--- Limpieza opcional para re-ejecutar el script
+-- Limpieza opcional para re-ejecutar el script de manera segura
 DROP ROLE IF EXISTS asesor;
 DROP ROLE IF EXISTS administrativo;
 DROP ROLE IF EXISTS encargado;
 DROP ROLE IF EXISTS empleado;
 
--- Rol común (sin login)
+-- Rol común sin posibilidad de iniciar sesión: actúa como agrupador de permisos
 CREATE ROLE empleado NOLOGIN;
 
--- Usuarios (roles con login)
+-- Usuarios reales: roles con LOGIN y contraseña
 CREATE ROLE asesor LOGIN PASSWORD 'Asesor_2026!';
 CREATE ROLE administrativo LOGIN PASSWORD 'Administrativo_2026!';
 CREATE ROLE encargado LOGIN PASSWORD 'Encargado_2026!';
 
--- a) Todos pertenecen al rol empleado
+-- Inciso a): todos los usuarios pertenecen al rol empleado
 GRANT empleado TO asesor, administrativo, encargado;
 ```
 
 ### 2) Otorgar privilegios del enunciado
 
+Los privilegios se otorgan en el orden lógico del enunciado. Lo que es común a todos se asigna al rol `empleado`; lo específico se otorga directamente a cada usuario, que igual mantiene la herencia del rol.
+
 ```sql
--- a) empleado: puede consultar apellido y nombre de cliente
+-- a) empleado: SELECT a nivel de columnas (apellido, nombre) en cliente.
+--    Se otorga al rol y, por herencia, todos los usuarios pueden ejecutar la consulta.
 GRANT SELECT (apellido, nombre)
 ON practico1c.cliente
 TO empleado;
 
--- b) asesor: además de empleado, consulta taller e inserta en accidente
+-- b) asesor: además de lo de empleado, puede consultar taller e insertar en accidente.
 GRANT SELECT ON practico1c.taller TO asesor;
 GRANT INSERT ON practico1c.accidente TO asesor;
 
--- c) administrativo: consulta automovil
+-- c) administrativo: SELECT sobre la tabla automovil.
 GRANT SELECT ON practico1c.automovil TO administrativo;
 
--- d) encargado: borrar en todas las tablas y actualizar tasa de categoria
+-- d) encargado: DELETE sobre todas las tablas del esquema y UPDATE solo de la columna
+--    tasa en categoria. ALL TABLES IN SCHEMA es un atajo cómodo para no listar tabla
+--    por tabla.
 GRANT DELETE ON ALL TABLES IN SCHEMA practico1c TO encargado;
 GRANT UPDATE (tasa) ON practico1c.categoria TO encargado;
 ```
 
 ### 3) Comprobación de permisos
+
+PostgreSQL no tiene un único `SHOW GRANTS` como MySQL, así que la verificación se arma combinando varias consultas al diccionario y funciones del estilo `has_table_privilege` / `has_column_privilege`. La idea es chequear tres cosas: que los roles existen y saber cuáles pueden iniciar sesión, que la membresía al rol `empleado` quedó bien establecida, y que cada privilegio puntual está efectivamente otorgado.
 
 ```sql
 -- roles y capacidad de login
@@ -111,12 +122,16 @@ SELECT
 
 ### Resultado esperado por inciso
 
-- `empleado`: `SELECT(apellido, nombre)` en `practico1c.cliente`.
-- `asesor`: hereda lo de `empleado` + `SELECT` en `practico1c.taller` + `INSERT` en `practico1c.accidente`.
-- `administrativo`: hereda lo de `empleado` + `SELECT` en `practico1c.automovil`.
-- `encargado`: hereda lo de `empleado` + `DELETE` en todas las tablas del esquema + `UPDATE(tasa)` en `practico1c.categoria`.
+A modo de resumen, los permisos efectivos que debería ver cada rol después de ejecutar todos los `GRANT` son:
+
+- `empleado`: `SELECT(apellido, nombre)` sobre `practico1c.cliente`. Todo lo demás se hereda hacia los tres usuarios.
+- `asesor`: lo heredado de `empleado` más `SELECT` sobre `practico1c.taller` e `INSERT` sobre `practico1c.accidente`.
+- `administrativo`: lo heredado de `empleado` más `SELECT` sobre `practico1c.automovil`.
+- `encargado`: lo heredado de `empleado` más `DELETE` sobre todas las tablas del esquema `practico1c` y `UPDATE(tasa)` sobre `practico1c.categoria`.
 
 ## Bloque único (ejecución directa)
+
+El siguiente bloque concentra todo el ejercicio en un solo script, útil cuando se quiere reproducir la resolución desde cero.
 
 ```sql
 DROP ROLE IF EXISTS asesor;

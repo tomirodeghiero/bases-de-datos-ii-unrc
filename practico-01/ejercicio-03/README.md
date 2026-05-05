@@ -1,15 +1,10 @@
 # Ejercicio 3
 
-Las consultas de este archivo se basan en los siguientes comandos:
-
-- `SELECT` para recuperar datos.
-- `WHERE` para filtrar.
-- `ORDER BY` para ordenar.
-- `GROUP BY` y `HAVING` para consultas con agregación.
+Este ejercicio se centra en las consultas DML del repaso: filtros con `WHERE`, ordenamientos con `ORDER BY`, agregaciones con `GROUP BY` y `HAVING`, y subconsultas. Las cuatro primeras consultas son las pedidas por el enunciado y la quinta corresponde a la parte de álgebra relacional. En cada caso se acompaña la sentencia con una breve justificación de por qué resuelve el pedido.
 
 ## a) Clientes sin ventas en la base del inciso 1.a
 
-Quieren todos los datos del cliente y solo los que no tengan ninguna factura asociada.
+El enunciado pide listar los clientes (con todos sus datos) que no tengan ninguna factura asociada, ordenando el resultado por apellido y nombre en forma descendente.
 
 ```sql
 SELECT c.nro_cliente,
@@ -28,9 +23,11 @@ ORDER BY c.apellido DESC, c.nombre DESC;
 
 ### Idea
 
-`NOT EXISTS` expresa directamente "este cliente no tiene ventas". El `ORDER BY` usa apellido y nombre en forma descendente.
+La pregunta se modela naturalmente con una subconsulta correlacionada: `NOT EXISTS` se lee literalmente como "no existe ninguna factura asociada a este cliente". Es una formulación equivalente a `LEFT JOIN ... WHERE factura.nro_cliente IS NULL` o `WHERE nro_cliente NOT IN (SELECT nro_cliente FROM factura)`, pero `NOT EXISTS` se comporta correctamente frente a posibles `NULL` y suele ser la opción más limpia. El `ORDER BY ... DESC` cubre el orden por apellido y nombre en forma descendente que pide el enunciado. Sobre los datos cargados en el ejercicio 2, el resultado esperado es Diego Luna, que es el único cliente sin facturas asociadas.
 
 ## b) Vehículos que usaron el parquímetro 9 en la base del inciso 1.b
+
+El enunciado pide listar los vehículos que utilizaron el parquímetro 9 e indicar modelo y color. Se incluye también la patente para identificar inequívocamente cada vehículo, ya que sin ella podrían aparecer filas que parezcan repetidas (mismo modelo y color, distinto auto).
 
 ```sql
 SELECT DISTINCT v.patente,
@@ -44,9 +41,9 @@ WHERE e.id_parquimetro = 9;
 
 ### Idea
 
-Se hace un `JOIN` entre `vehiculo` y `estacionamiento`, y `DISTINCT` evita repetir un vehículo si estaciono varias veces en el mismo parquímetro.
+La consulta cruza `vehiculo` con `estacionamiento` por la patente y filtra los registros del parquímetro 9. El `DISTINCT` es importante porque un mismo vehículo puede haberse estacionado varias veces en el mismo parquímetro: sin él, cada estacionamiento generaría una fila duplicada en el resultado. Con los datos del ejercicio 2, las patentes `AA123BB` y `AC456DD` tienen estacionamientos en el parquímetro 9, por lo que aparecen en el listado.
 
-## c) Clientes con mas de 3 accidentes en la base del inciso 1.c
+## c) Clientes con más de 3 accidentes en la base del inciso 1.c
 
 ```sql
 SELECT c.dni,
@@ -61,9 +58,9 @@ HAVING COUNT(*) > 3;
 
 ### Idea
 
-`GROUP BY` forma un grupo por cliente y `HAVING` deja solo los grupos cuya cantidad de accidentes supera 3.
+Se trata de un caso típico de agregación con filtro posterior. El `GROUP BY` arma un grupo por cada cliente y `HAVING COUNT(*) > 3` deja solo aquellos cuyos accidentes superan los tres. La diferencia clave con `WHERE` es que `HAVING` aplica sobre filas ya agrupadas, que es lo que se necesita acá. Con la carga del ejercicio 2, el único cliente que cumple es Lucas Gómez, que registra cuatro accidentes.
 
-## d) Maximo y minimo monto de factura por cliente en la base del inciso 1.a
+## d) Máximo y mínimo monto de factura por cliente en la base del inciso 1.a
 
 ```sql
 SELECT c.nro_cliente,
@@ -80,13 +77,15 @@ ORDER BY c.nro_cliente;
 
 ### Idea
 
-La agregación se hace por cliente. `MAX` y `MIN` son exactamente las funciones agregadas para este tipo de consulta sumaria.
+Las funciones `MAX` y `MIN` aplicadas sobre `monto` resuelven directamente el pedido. Como la consulta utiliza `JOIN` (un join interno), solo aparecen los clientes que tienen al menos una factura. Esto es deseable: un cliente sin facturas no tiene un máximo ni un mínimo bien definido y, además, su caso ya se cubre en el inciso a). El `ORDER BY c.nro_cliente` es un detalle de presentación para que el listado quede ordenado de forma estable.
 
-## e) Tres consultas extra en algebra relacional
+## e) Tres consultas extra en álgebra relacional
 
-Tomo como base la del inciso 1.a porque tiene relaciones simples de explicar.
+Para esta parte se elige como dominio la base del inciso 1.a, porque sus relaciones son simples y permiten ilustrar con claridad cada operador. Entre las tres consultas se cubren los operadores que pide el enunciado: selección, proyección, unión, intersección y producto cartesiano.
 
-### Consulta 1 - Productos con stock por debajo o exactamente en el minimo
+### Consulta 1 — Productos con stock por debajo o igual al mínimo
+
+Esta consulta apunta a detectar productos que necesitan reposición. Se usa una unión entre dos selecciones para ejemplificar el operador `∪`, aunque podría escribirse con un único `WHERE cantidad <= stock_minimo`.
 
 Álgebra relacional:
 
@@ -110,11 +109,13 @@ FROM producto
 WHERE cantidad = stock_minimo;
 ```
 
-Operadores usados: seleccion, proyeccion y union.
+Operadores usados: selección, proyección y unión.
 
-### Consulta 2 - Productos vendidos que todavía estan por debajo del stock máximo
+### Consulta 2 — Productos facturados que aún están por debajo del stock máximo
 
-Algebra relacional:
+La consulta combina información del registro de ventas (`ItemFactura`) y del catálogo (`Producto`) para identificar productos que ya tuvieron movimiento pero todavía tienen capacidad de stock disponible.
+
+Álgebra relacional:
 
 ```text
 pi_{cod_producto}(ItemFactura)
@@ -132,9 +133,11 @@ JOIN producto p
 WHERE p.cantidad < p.stock_maximo;
 ```
 
-Operadores usados: seleccion, proyeccion e interseccion.
+Operadores usados: selección, proyección e intersección. En SQL se usa un `JOIN` con `DISTINCT` porque modela exactamente la intersección sobre el conjunto de códigos de producto que cumplen ambas condiciones.
 
-### Consulta 3 - Pares cliente-factura usando producto cartesiano
+### Consulta 3 — Pares cliente-factura a partir del producto cartesiano
+
+Esta consulta sirve para ilustrar el operador de producto cartesiano. El producto entre `Cliente` y `Factura` genera todas las combinaciones posibles, y la selección posterior se queda solo con los pares que coinciden por `nro_cliente`. Esa combinación de operadores es, conceptualmente, lo que un join interno hace por debajo.
 
 Álgebra relacional:
 
@@ -157,4 +160,4 @@ JOIN factura f
   ON c.nro_cliente = f.nro_cliente;
 ```
 
-Operadores usados: producto cartesiano, seleccion y proyeccion.
+Operadores usados: producto cartesiano, selección y proyección.

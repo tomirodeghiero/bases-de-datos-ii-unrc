@@ -1,10 +1,10 @@
 # Ejercicio 2
 
-La idea de esta carga es que los datos sean coherentes y, además, sirvan para probar todas las consultas del ejercicio 3. Por eso:
+Este ejercicio carga datos coherentes en las tres bases definidas en el ejercicio 1. La selección de filas no es arbitraria: se eligió de modo que cada consulta del ejercicio 3 devuelva un resultado significativo y que las restricciones declaradas (claves, dominios, integridad referencial) realmente entren en juego. En particular:
 
-- en el inciso a hay un cliente sin facturas;
-- en el inciso b hay vehiculos que usaron el parquimetro 9;
-- en el inciso c hay un cliente con mas de 3 accidentes.
+- en el inciso a se incluye un cliente sin facturas, para que la consulta de clientes sin ventas devuelva al menos una fila;
+- en el inciso b se reparten estacionamientos sobre el parquímetro 9, que es el que se consulta en el ejercicio 3.b;
+- en el inciso c se carga un cliente con cuatro accidentes, lo que permite que la consulta con `HAVING COUNT(*) > 3` no quede vacía.
 
 ## Inciso a - MySQL / PostgreSQL
 
@@ -37,11 +37,13 @@ INSERT INTO item_factura (cod_producto, nro_factura, cantidad, precio) VALUES
     (102, 1004, 1, 8000.00);
 ```
 
-### Quée valida esta carga
+### Qué valida esta carga
 
-- `Diego Luna` queda sin ventas, asi que debe aparecer en la consulta de clientes sin facturas.
-- `Andres Perez` tiene dos facturas, asi que en maximo/minimo se ve bien la agregacion.
-- Los montos de cada factura coinciden con la suma de sus items.
+Esta combinación de filas cubre los tres escenarios que después se consultan en el ejercicio 3 sobre la base del inciso a:
+
+- Diego Luna queda intencionalmente sin facturas, así aparece en la consulta de clientes sin ventas.
+- Andrés Pérez tiene dos facturas con montos distintos, lo que permite observar correctamente el `MAX` y el `MIN` por cliente.
+- Los montos declarados en cada factura coinciden con la suma de los precios y cantidades de sus ítems, manteniendo la coherencia del modelo.
 
 ## Inciso b - MySQL
 
@@ -77,7 +79,7 @@ VALUES
 
 ## Inciso b - Oracle
 
-En Oracle no inserto `id_estacionamiento` porque lo completa el trigger.
+En Oracle se omite explícitamente la columna `id_estacionamiento` en el `INSERT`, ya que el trigger `trg_estacionamiento_bi` definido en el ejercicio 1 se encarga de tomar el siguiente valor de la secuencia y completar el campo. Insertarlo a mano sería redundante y, además, podría romper la consistencia de la secuencia.
 
 ```sql
 INSERT INTO persona (dni, nombre_y_apellido, direccion)
@@ -261,5 +263,7 @@ VALUES (5006, 33444555, 'DDD444', 1, DATE '2024-08-09', 110000.00);
 
 ### Qué valida esta carga
 
-- `Lucas Gomez` tiene 4 accidentes, asi que debe aparecer en la consulta con `HAVING COUNT(*) > 3`.
-- Las marcas y modelos respetan el dominio pedido en el enunciado.
+La carga del inciso c está pensada para que las consultas del ejercicio 3.c puedan ejercitarse:
+
+- Lucas Gómez aparece con cuatro accidentes, lo que asegura que la consulta con `HAVING COUNT(*) > 3` devuelva al menos una fila.
+- Todas las marcas y modelos respetan los dominios definidos en el DDL (`marca IN ('FIAT', 'RENAULT', 'FORD')` y `modelo BETWEEN 1990 AND 2015`), así que ninguna inserción es rechazada por los `CHECK` y se confirma indirectamente que las restricciones están funcionando.
