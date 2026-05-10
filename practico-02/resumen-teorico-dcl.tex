@@ -1,0 +1,969 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+
+% --- Diagramas simples ---
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Resumen Teórico --- DCL (Práctico N.\textsuperscript{o} 2)}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={NUMERIC,VARCHAR,DECIMAL,DATE,TIMESTAMP,TIME,
+        BIGINT,VARCHAR2,NUMBER,ENUM,SCHEMA,SEQUENCE,TRIGGER,
+        BEFORE,EACH,ROW,NEXTVAL,DUAL,RAISE,EXCEPTION,LOOP,
+        IDENTIFIED,QUOTA,UNLIMITED,USERS,TABLESPACE,
+        DATABASE,DOMAIN,GRANT,REVOKE,ROLE,USER,LOGIN,NOLOGIN,
+        OPTION,REFERENCES,RESTRICT,CASCADE,
+        AUTO\_INCREMENT,IF,EXISTS,ALTER,SHOW,USE,
+        SEARCH\_PATH,EXECUTE,IMMEDIATE,PROFILE,PASSWORD,EXPIRE,
+        CONNECT\_TIME,RESOURCE\_LIMIT,SYSTEM,SYSDBA,
+        MAX\_CONNECTIONS\_PER\_HOUR,MAX\_QUERIES\_PER\_HOUR,
+        MAX\_UPDATES\_PER\_HOUR,MAX\_USER\_CONNECTIONS,
+        SESSIONS\_PER\_USER,IDLE\_TIME,
+        ADMIN,GROUP,SUPERUSER,NOSUPERUSER,
+        CREATEDB,NOCREATEDB,CREATEROLE,NOCREATEROLE,
+        INHERIT,NOINHERIT,REPLICATION,NOREPLICATION,
+        WITH,FROM,TO,ON,AS,AND,OR,IN,IS,NOT,NULL,
+        INSERT,UPDATE,DELETE,SELECT,SHOW,REVOKE,GRANT,
+        IDENTIFIED,BY,ENCRYPTED,UNENCRYPTED,VALID,UNTIL,
+        CONNECTION,LIMIT,DEFAULT,TEMPORARY},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstset{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+\title{Resumen Teórico --- DCL\\[4pt]
+       \large Bases de Datos II --- Práctico N.\textsuperscript{o} 2}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Resumen Teórico}}\\[6pt]
+    {\large DCL --- Lenguaje de Control de Datos\\[2pt]
+    Práctico N.\textsuperscript{o} 2}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Material elaborado a partir del teórico
+    \emph{Teorico\_3\_DCL}, el enunciado del práctico y las
+    resoluciones realizadas.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introducción}
+% =====================================================
+
+El \textbf{DCL} (\emph{Data Control Language}) es la parte del lenguaje SQL
+dedicada a la \textbf{seguridad} y al \textbf{control de acceso} a los
+recursos de la base de datos. Mientras que el DDL define las estructuras
+(tablas, vistas, dominios) y el DML manipula los datos, el DCL responde a
+una pregunta distinta: \emph{¿quién puede hacer qué sobre cada objeto?}
+
+Una base de datos en producción rara vez se accede con un único usuario.
+Se necesita distinguir, por ejemplo, entre un \emph{cajero} que sólo puede
+consultar y modificar ciertas tablas, un \emph{administrativo} con
+permisos más amplios y un \emph{DBA} que controla la base completa.
+Para sostener ese tipo de organización SQL provee tres mecanismos
+complementarios:
+
+\begin{itemize}
+    \item \textbf{Usuarios}: cuentas con las que se inicia sesión en el motor.
+    \item \textbf{Privilegios}: permisos individuales sobre objetos
+    (tablas, vistas, esquemas, procedimientos, etc.).
+    \item \textbf{Roles} (o \emph{grupos}): conjuntos nominados de
+    privilegios que se asignan a uno o varios usuarios para evitar
+    repetir trabajo de configuración.
+\end{itemize}
+
+\begin{nota}
+\textbf{Idea clave del Teórico 3.} El estándar SQL define los conceptos de
+\emph{usuario}, \emph{rol} y \emph{privilegio}, y los comandos
+\texttt{GRANT} / \texttt{REVOKE}. Sin embargo, \emph{la administración
+real de usuarios la implementa cada motor a su manera}: MySQL, PostgreSQL
+y Oracle XE no son compatibles entre sí en este punto. Reconocer qué es
+estándar y qué es específico es la mitad del práctico.
+\end{nota}
+
+% =====================================================
+\section{Seguridad: el problema y los mecanismos}
+% =====================================================
+
+SQL ofrece la siguiente caja de herramientas para proteger los datos:
+
+\begin{enumerate}
+    \item \textbf{Autenticación}: definición de usuarios y roles, con
+    sus contraseñas y, en algunos motores, restricción del \emph{host}
+    desde el que se aceptan las conexiones.
+    \item \textbf{Autorización}: asignación de privilegios sobre objetos.
+    Sin un privilegio explícito un usuario no puede leer ni escribir
+    nada que no le pertenezca.
+    \item \textbf{Control de recursos}: límites de uso (cantidad de
+    consultas por hora, tiempo de inactividad, número máximo de
+    conexiones simultáneas) que evitan abusos.
+    \item \textbf{Trazabilidad implícita}: el grafo de concesiones
+    permite, en cualquier momento, contestar quién dio qué privilegio
+    a quién.
+\end{enumerate}
+
+\paragraph{Modelo conceptual.} El teórico cierra con un diagrama que
+sintetiza las relaciones entre los conceptos:
+
+\begin{center}
+\begin{tikzpicture}[node distance=1.6cm and 2.2cm,
+    box/.style={rectangle,draw,minimum width=2.4cm,minimum height=0.8cm,
+                font=\small},
+    arr/.style={-{Latex},thick}]
+    \node[box] (usu) {Usuario};
+    \node[box,below=of usu]              (priv) {Privilegio};
+    \node[box,right=of usu]              (rol)  {Rol};
+    \node[box,right=of rol]              (per)  {Perfil};
+    \node[box,below=of per]              (rec)  {Recurso};
+    \draw[arr] (usu) -- node[left,font=\scriptsize]{1\;\;\;1-N} (priv);
+    \draw[arr] (usu) -- node[above,font=\scriptsize]{1\;\;\;0-N} (rol);
+    \draw[arr] (rol) -- node[right,font=\scriptsize]{1\;\;\;1-N} (priv);
+    \draw[arr] (usu) -- node[above,font=\scriptsize,sloped]{1\;\;\;0-1} (per);
+    \draw[arr] (per) -- node[right,font=\scriptsize]{1\;\;\;1-N} (rec);
+\end{tikzpicture}
+\end{center}
+
+Un \emph{usuario} se asocia con uno o más \emph{privilegios}
+(directamente o a través de \emph{roles}) y, opcionalmente, con un
+\emph{perfil} que regula su consumo de \emph{recursos}.
+
+% =====================================================
+\section{Asignación de privilegios: \texttt{GRANT}}
+% =====================================================
+
+% -----------------------------------------------------
+\subsection{Sintaxis general}
+% -----------------------------------------------------
+
+El comando \texttt{GRANT} concede privilegios sobre objetos a usuarios o
+roles:
+
+\begin{lstlisting}
+GRANT {ALL | listaPrivilegios}
+   ON TABLE listaTablas
+   TO listaUsuariosRoles
+[WITH GRANT OPTION];
+\end{lstlisting}
+
+Significado de los componentes:
+
+\begin{itemize}
+    \item \texttt{ALL}: otorga \emph{todos} los privilegios soportados
+    sobre el objeto. Es cómodo, pero peligroso.
+    \item \texttt{listaPrivilegios}: una o más operaciones permitidas.
+    Las clásicas son \texttt{SELECT}, \texttt{INSERT}, \texttt{UPDATE},
+    \texttt{DELETE}, \texttt{REFERENCES} y \texttt{EXECUTE}.
+    \item \texttt{listaTablas}: el objeto (o lista de objetos) sobre el
+    que se aplican; en el estándar es uno solo, varios motores aceptan
+    listas o comodines (\texttt{*.*}, \texttt{db.*}).
+    \item \texttt{listaUsuariosRoles}: a quién se le da el permiso.
+    \item \texttt{WITH GRANT OPTION}: el receptor podrá, a su vez,
+    delegar ese mismo permiso a un tercero.
+\end{itemize}
+
+% -----------------------------------------------------
+\subsection{Privilegios habituales}
+% -----------------------------------------------------
+
+\begin{center}
+\begin{tabular}{@{}l p{9.5cm}@{}}
+\toprule
+\textbf{Privilegio} & \textbf{Permite\dots} \\
+\midrule
+\texttt{SELECT}       & Leer filas de una tabla o vista. \\
+\texttt{INSERT}       & Agregar filas. \\
+\texttt{UPDATE}       & Modificar filas existentes (puede acotarse a
+                        ciertas columnas). \\
+\texttt{DELETE}       & Eliminar filas. \\
+\texttt{REFERENCES}   & Crear claves foráneas y \texttt{CHECK}s que
+                        referencien la tabla/columna. \\
+\texttt{EXECUTE}      & Ejecutar funciones o procedimientos almacenados. \\
+\texttt{CREATE}, \texttt{DROP}, \texttt{ALTER} & Operar sobre la
+                        estructura de bases, tablas o índices. \\
+\texttt{INDEX}        & Crear y eliminar índices. \\
+\texttt{CREATE VIEW}, \texttt{SHOW VIEW} & Trabajar con vistas. \\
+\texttt{CREATE ROUTINE}, \texttt{ALTER ROUTINE} & Crear/modificar
+                        procedimientos almacenados. \\
+\texttt{GRANT OPTION} & Delegar privilegios a otros usuarios. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{nota}
+\textbf{Granularidad por columna.} Para \texttt{SELECT}, \texttt{INSERT},
+\texttt{UPDATE} y \texttt{REFERENCES} es posible especificar la lista
+de columnas a las que aplica el permiso, escribiéndolas entre paréntesis
+después del nombre del privilegio: \texttt{GRANT SELECT(apellido,
+nombre) ON personas TO U1}. Es la forma natural de cumplir consignas
+del práctico como \emph{``puede consultar los campos apellido y nombre
+de cliente''}.
+\end{nota}
+
+% -----------------------------------------------------
+\subsection{Ejemplos básicos del teórico}
+% -----------------------------------------------------
+
+\begin{lstlisting}
+-- 1) SELECT sobre una tabla a varios usuarios.
+GRANT SELECT ON personas TO U1, U2;
+
+-- 2) Permitir a U1 crear FKs hacia personas(dni).
+GRANT REFERENCES (dni) ON personas TO U1;
+
+-- 3) U1 podra, a su vez, delegar el SELECT.
+GRANT SELECT ON personas TO U1 WITH GRANT OPTION;
+
+-- 4) SELECT solo sobre dos columnas (PostgreSQL >= 9).
+GRANT SELECT (apellido, nombre) ON personas TO U1;
+\end{lstlisting}
+
+% =====================================================
+\section{Eliminación de privilegios: \texttt{REVOKE}}
+% =====================================================
+
+\texttt{REVOKE} es la operación inversa: retira privilegios previamente
+otorgados.
+
+\begin{lstlisting}
+REVOKE {ALL | listaPrivilegios}
+    ON listaTablas
+  FROM listaUsuarios [RESTRICT | CASCADE];
+\end{lstlisting}
+
+\paragraph{\texttt{RESTRICT} vs \texttt{CASCADE}.} Cuando un usuario
+otorgó un permiso (vía \texttt{WITH GRANT OPTION}) a otros, al revocárselo
+hay que decidir qué hacer con esos terceros:
+
+\begin{itemize}
+    \item \texttt{CASCADE}: el revoke se propaga. Si U1 dio el permiso
+    a U3 y a U1 se le revoca, U3 también lo pierde.
+    \item \texttt{RESTRICT}: si revocar implicaría romper permisos
+    transferidos, la operación falla. Permite preguntar antes de
+    propagar.
+\end{itemize}
+
+\begin{lstlisting}
+REVOKE SELECT ON personas FROM U1 RESTRICT;
+\end{lstlisting}
+
+\begin{nota}
+\textbf{Por defecto, \texttt{REVOKE} es en cascada} en el estándar.
+PostgreSQL implementa correctamente la diferencia
+\texttt{RESTRICT}/\texttt{CASCADE}; \textbf{MySQL no la respeta}, y
+revoca de forma directa sin distinguir explícitamente.
+\end{nota}
+
+% =====================================================
+\section{Propietarios y permisos sobre el esquema}
+% =====================================================
+
+\textbf{Propiedad.} El \emph{propietario} de un objeto es siempre el
+usuario que lo creó. Sólo el propietario (o un usuario con privilegios
+administrativos suficientes) puede otorgar permisos sobre el objeto a
+terceros. De ahí que en el práctico, antes de hacer cualquier
+\texttt{GRANT}, se conecte el DBA o el dueño del esquema.
+
+\textbf{Operaciones de esquema.} Las operaciones que modifican la
+\emph{estructura} de la base (\texttt{CREATE}, \texttt{DROP},
+\texttt{ALTER}) sólo pueden ser realizadas por el propietario del
+esquema o por usuarios con los privilegios correspondientes
+(\texttt{CREATE}, \texttt{DROP}, \texttt{ALTER} sobre la base).
+
+% =====================================================
+\section{Grafo de concesión de permisos}
+% =====================================================
+
+Una herramienta conceptual muy práctica para razonar sobre el estado
+de los permisos es el \textbf{grafo de concesión}: un grafo dirigido
+\emph{por recurso y tipo de privilegio} en el que los nodos son los
+usuarios y las aristas representan concesiones.
+
+\begin{itemize}
+    \item Existe un arco $U_i \to U_j$ si $U_i$ concedió a $U_j$
+    el privilegio en cuestión.
+    \item La raíz es siempre el \emph{DBA} o el \emph{dueño del objeto}.
+    \item \textbf{Un usuario tiene el permiso si y sólo si existe un
+    camino desde la raíz hasta su nodo.}
+\end{itemize}
+
+Esa caracterización en términos de caminos es la que justifica el
+comportamiento de \texttt{REVOKE \dots\ CASCADE}: si al cortar un arco
+algunos nodos quedan sin camino desde la raíz, automáticamente pierden
+el privilegio.
+
+\paragraph{Ejemplo paso a paso (del Teórico 3).}
+
+\textbf{(1) Estado inicial.} El DBA es el único con \texttt{UPDATE}
+sobre \texttt{personas}.
+
+\begin{center}
+\begin{tikzpicture}[node distance=1cm and 1.6cm,
+    n/.style={circle,draw,minimum size=8mm,inner sep=0pt,font=\small},
+    arr/.style={-{Latex}}]
+    \node[n] (dba) {DBA};
+    \node[n,right=of dba,yshift=0.6cm]  (u1) {U1};
+    \node[n,right=of dba,yshift=-0.6cm] (u2) {U2};
+    \node[n,right=2cm of u1]            (u3) {U3};
+\end{tikzpicture}
+\end{center}
+
+\textbf{(2)} El DBA ejecuta:
+\texttt{GRANT UPDATE ON personas TO U1, U2 WITH GRANT OPTION}.
+
+\begin{center}
+\begin{tikzpicture}[node distance=1cm and 1.6cm,
+    n/.style={circle,draw,minimum size=8mm,inner sep=0pt,font=\small},
+    arr/.style={-{Latex}}]
+    \node[n] (dba) {DBA};
+    \node[n,right=of dba,yshift=0.6cm]  (u1) {U1};
+    \node[n,right=of dba,yshift=-0.6cm] (u2) {U2};
+    \node[n,right=2cm of u1]            (u3) {U3};
+    \draw[arr] (dba) -- (u1);
+    \draw[arr] (dba) -- (u2);
+\end{tikzpicture}
+\end{center}
+
+\textbf{(3)} U1 ejecuta:
+\texttt{GRANT UPDATE ON personas TO U3}.
+
+\begin{center}
+\begin{tikzpicture}[node distance=1cm and 1.6cm,
+    n/.style={circle,draw,minimum size=8mm,inner sep=0pt,font=\small},
+    arr/.style={-{Latex}}]
+    \node[n] (dba) {DBA};
+    \node[n,right=of dba,yshift=0.6cm]  (u1) {U1};
+    \node[n,right=of dba,yshift=-0.6cm] (u2) {U2};
+    \node[n,right=2cm of u1]            (u3) {U3};
+    \draw[arr] (dba) -- (u1);
+    \draw[arr] (dba) -- (u2);
+    \draw[arr] (u1)  -- (u3);
+\end{tikzpicture}
+\end{center}
+
+\textbf{(4)} El DBA ejecuta:
+\texttt{REVOKE UPDATE ON personas FROM U1 CASCADE}.
+Como el único camino al nodo U3 pasaba por U1, U3 también pierde el
+privilegio.
+
+\begin{center}
+\begin{tikzpicture}[node distance=1cm and 1.6cm,
+    n/.style={circle,draw,minimum size=8mm,inner sep=0pt,font=\small},
+    arr/.style={-{Latex}}]
+    \node[n] (dba) {DBA};
+    \node[n,right=of dba,yshift=0.6cm]  (u1) {U1};
+    \node[n,right=of dba,yshift=-0.6cm] (u2) {U2};
+    \node[n,right=2cm of u1]            (u3) {U3};
+    \draw[arr] (dba) -- (u2);
+\end{tikzpicture}
+\end{center}
+
+% =====================================================
+\section{Roles}
+% =====================================================
+
+Un \textbf{rol} representa un \emph{tipo de usuario}: agrupa privilegios
+asociados a una función dentro de la organización (cajero, asesor,
+empleado, encargado). En lugar de repetir las mismas concesiones para
+cada cuenta, se declara un rol una sola vez y se le asigna a las cuentas
+que lo necesiten. Cuando aparece un nuevo cajero, basta con asignarle
+el rol \emph{cajero} y queda configurado.
+
+\paragraph{Administración de roles.}
+
+\begin{lstlisting}
+-- Crear y eliminar roles.
+CREATE ROLE nombreRole;
+DROP ROLE nombreRole;
+
+-- Conceder un rol a un usuario.
+GRANT role TO usuario;
+
+-- Conceder un rol a otro rol (anidamiento).
+GRANT role1 TO role2;
+\end{lstlisting}
+
+Las dos últimas formas explican por qué \texttt{GRANT} aparece dos veces
+en una secuencia típica de configuración: primero se otorgan los
+privilegios al rol y luego se otorga el rol a los usuarios.
+
+% =====================================================
+\section{Diferencias entre motores}
+% =====================================================
+
+La administración de usuarios y roles \emph{no es estándar}. Cada motor
+tiene sus comandos, su modelo de cuentas y sus opciones de seguridad.
+
+% -----------------------------------------------------
+\subsection{MySQL}
+% -----------------------------------------------------
+
+MySQL trabaja con \emph{cuentas} de la forma \texttt{usuario@host}, donde
+\emph{host} indica desde qué máquina se acepta la conexión:
+
+\begin{itemize}
+    \item \texttt{'app'@'localhost'}: sólo conexiones locales.
+    \item \texttt{'app'@'\%'}: el comodín \texttt{\%} acepta cualquier
+    host.
+    \item Un mismo nombre de usuario puede existir con distintos hosts y
+    distintas contraseñas.
+\end{itemize}
+
+\paragraph{Creación y borrado de cuentas.}
+
+\begin{lstlisting}
+CREATE USER 'usuario'@'host' [IDENTIFIED BY 'password'];
+DROP USER 'usuario'@'host';
+\end{lstlisting}
+
+\paragraph{Roles (desde MySQL 8).}
+
+\begin{lstlisting}
+CREATE ROLE [IF NOT EXISTS] role [, role] ...;
+GRANT role [, role] ... TO user_or_role [, user_or_role] ...
+    [WITH ADMIN OPTION];
+\end{lstlisting}
+
+\paragraph{Límites de recursos.} Desde MySQL 5.0 se pueden acotar:
+
+\begin{itemize}
+    \item \texttt{MAX\_QUERIES\_PER\_HOUR}
+    \item \texttt{MAX\_UPDATES\_PER\_HOUR}
+    \item \texttt{MAX\_CONNECTIONS\_PER\_HOUR}
+    \item \texttt{MAX\_USER\_CONNECTIONS} (conexiones simultáneas).
+\end{itemize}
+
+\begin{lstlisting}
+-- Forma clasica (hasta 5.7) con GRANT.
+GRANT ALL ON *.* TO 'app'@'localhost' WITH
+    MAX_QUERIES_PER_HOUR 20
+    MAX_UPDATES_PER_HOUR 10
+    MAX_CONNECTIONS_PER_HOUR 5
+    MAX_USER_CONNECTIONS 2;
+
+-- Forma actual (>= 8) con ALTER USER.
+ALTER USER 'app'@'localhost'
+    WITH MAX_QUERIES_PER_HOUR 500
+         MAX_UPDATES_PER_HOUR 100;
+\end{lstlisting}
+
+\begin{nota}
+\textbf{Para MySQL 8+.} Los límites de recursos en \texttt{GRANT} fueron
+desaprobados como mecanismo principal y la cátedra recomienda usar
+\texttt{ALTER USER}. La sintaxis \texttt{GRANT \dots\ WITH MAX\_\dots}
+sigue funcionando por compatibilidad.
+\end{nota}
+
+% -----------------------------------------------------
+\subsection{PostgreSQL}
+% -----------------------------------------------------
+
+En PostgreSQL los conceptos de \emph{usuario}, \emph{rol} y
+\emph{grupo} son lo mismo: todos son \emph{roles}. La diferencia es
+operativa:
+
+\begin{itemize}
+    \item Un rol con permiso de \texttt{LOGIN} se comporta como
+    \emph{usuario}.
+    \item Un rol \texttt{NOLOGIN} se comporta como \emph{grupo}.
+    Los usuarios se hacen miembros de él para heredar sus privilegios.
+\end{itemize}
+
+\paragraph{Creación de roles.} La sintaxis es muy expresiva:
+
+\begin{lstlisting}
+CREATE ROLE nombre [WITH] [option ...];
+-- option puede ser, entre otras:
+--   SUPERUSER | NOSUPERUSER
+--   CREATEDB  | NOCREATEDB
+--   CREATEROLE| NOCREATEROLE
+--   INHERIT   | NOINHERIT
+--   LOGIN     | NOLOGIN
+--   CONNECTION LIMIT n
+--   {ENCRYPTED | UNENCRYPTED} PASSWORD 'pwd'
+--   VALID UNTIL 'timestamp'
+--   IN ROLE/IN GROUP rolename, ...
+--   ROLE rolename, ...
+\end{lstlisting}
+
+Existe además el atajo \texttt{CREATE USER} (que es \texttt{CREATE ROLE}
+con \texttt{LOGIN} por defecto) y la utilidad de línea de comandos
+\texttt{createuser}, con flags como \texttt{-P} (pide contraseña),
+\texttt{-d} (puede crear bases), \texttt{-A} (no puede crear
+usuarios) y \texttt{-h} (host).
+
+\paragraph{Grupos.} \texttt{CREATE GROUP} es un alias histórico de
+\texttt{CREATE ROLE} sin \texttt{LOGIN}:
+
+\begin{lstlisting}
+CREATE GROUP groupName [WITH SYSID groupid] [USER username, ...];
+ALTER GROUP groupName {ADD | DROP} USER username;  -- equivale a GRANT/REVOKE
+DROP GROUP groupName;
+\end{lstlisting}
+
+\paragraph{Acceso desde clientes.} Por defecto PostgreSQL acepta
+conexiones sólo desde \texttt{localhost}. Para permitir clientes
+remotos hay que editar \texttt{pg\_hba.conf}, por ejemplo:
+
+\begin{lstlisting}
+# TYPE  DATABASE  USER  CIDR-ADDRESS  METHOD
+host    all       all   0.0.0.0/0     md5
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Oracle XE}
+% -----------------------------------------------------
+
+En Oracle XE \textbf{crear un usuario equivale a crear un esquema}: el
+usuario es el dueño de su propio espacio de objetos.
+
+\paragraph{Creación de usuario (ejemplo).}
+
+\begin{lstlisting}
+CREATE USER usuario
+    IDENTIFIED BY usuario
+    DEFAULT TABLESPACE users
+    QUOTA 10M ON users
+    TEMPORARY TABLESPACE temp
+    QUOTA 5M ON system
+    PASSWORD EXPIRE;
+\end{lstlisting}
+
+\texttt{PASSWORD EXPIRE} fuerza al usuario a cambiar la clave en su
+próximo \emph{login}, recurso muy usado para cuentas recién creadas
+(es justamente lo que pide el inciso 4 del práctico para
+\emph{empleado1}).
+
+\paragraph{Roles predefinidos.} Oracle XE trae tres roles listos para
+asignar:
+
+\begin{itemize}
+    \item \texttt{CONNECT}: conectarse a la base de datos.
+    \item \texttt{RESOURCE}: para desarrolladores; permite crear
+    objetos pero no vistas.
+    \item \texttt{DBA}: rol de administrador.
+\end{itemize}
+
+\paragraph{Perfiles (\texttt{PROFILE}).} Oracle permite definir
+\emph{perfiles} que limitan el uso de recursos por usuario y se
+asignan luego con \texttt{ALTER USER}:
+
+\begin{lstlisting}
+CREATE PROFILE desarrolador LIMIT
+    SESSIONS_PER_USER 1
+    IDLE_TIME 30
+    CONNECT_TIME 600;
+\end{lstlisting}
+
+Es la forma natural de cumplir consignas como ``\emph{el director sólo
+puede estar conectado un máximo de 20 minutos}'' del Ejercicio 4.
+
+\paragraph{Cuentas APEX vs cuentas del motor.} Oracle XE distingue las
+cuentas de la aplicación web APEX (creadas dentro de un \emph{workspace})
+de los usuarios del motor de base de datos. \textbf{Los usuarios APEX
+no son usuarios de la base}; sí lo son los esquemas que esos workspaces
+crean. El DBA del motor es \texttt{SYS} o \texttt{SYSTEM}, y la
+administración por shell se recomienda con \texttt{sqlplus}.
+
+\paragraph{Comparación rápida entre motores.}
+
+\begin{center}
+\begin{tabular}{@{}p{3.4cm} p{3.5cm} p{3.5cm} p{3.6cm}@{}}
+\toprule
+\textbf{Tema} & \textbf{MySQL 8+} & \textbf{PostgreSQL} &
+\textbf{Oracle XE} \\
+\midrule
+Cuenta & \texttt{usuario@host} con password & \emph{Role} con
+\texttt{LOGIN} & Usuario equivale a esquema. \\
+\addlinespace
+Roles & \texttt{CREATE ROLE} (desde 8) & Todo es rol;
+\texttt{CREATE ROLE} & \texttt{CREATE ROLE}; trae
+\texttt{CONNECT}/\texttt{RESOURCE}/\texttt{DBA}. \\
+\addlinespace
+Restricción de host & Parte del nombre de cuenta &
+\texttt{pg\_hba.conf} & Configuración de red separada. \\
+\addlinespace
+Limites de recursos & \texttt{MAX\_*\_PER\_HOUR} & \texttt{CONNECTION
+LIMIT} en el rol & \texttt{CREATE PROFILE} +
+\texttt{ALTER USER \dots\ PROFILE}. \\
+\addlinespace
+\texttt{REVOKE} con \texttt{RESTRICT} / \texttt{CASCADE} & No respeta
+realmente la diferencia & Implementado del estándar & Comportamiento
+estándar. \\
+\addlinespace
+Forzar cambio de clave & \texttt{ALTER USER \dots\ PASSWORD EXPIRE} &
+\texttt{VALID UNTIL} & \texttt{PASSWORD EXPIRE} en \texttt{CREATE} o
+\texttt{ALTER USER}. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================
+\section{Administración: usuarios, contraseñas y herramientas}
+% =====================================================
+
+\paragraph{MySQL.} La instalación crea el superusuario \texttt{root};
+desde la versión 5 solicita la contraseña durante la instalación, y
+desde la 8 en Linux por defecto autentica con el sistema operativo. Las
+tablas que almacenan usuarios y permisos viven en la base interna
+\texttt{mysql}. Para la administración se recomiendan
+\textbf{MySQL Workbench} (interfaz actual), \texttt{phpMyAdmin}
+(servicios de hosting) o \texttt{MySQLAdministrator} (desactualizado).
+
+\paragraph{PostgreSQL.} La instalación crea el superusuario
+\texttt{postgres} (con un usuario homónimo a nivel de sistema
+operativo en Linux). Para conectarse desde aplicaciones cliente con
+autenticación por base de datos --- y no por SO --- hay que ajustar
+\texttt{pg\_hba.conf}. Herramientas habituales:
+\textbf{PGAdmin IV} y \texttt{phpPgAdmin}.
+
+\paragraph{Oracle XE.} Se administra por web en
+\texttt{http://localhost:8080/apex} o, recomendado, por consola con
+\texttt{sqlplus}. En 11XE el usuario DBA del motor es \texttt{SYS} o
+\texttt{SYSTEM} y el workspace por defecto es \texttt{internal}.
+
+% =====================================================
+\section{Conexión con los ejercicios del práctico}
+% =====================================================
+
+El Práctico 2 está diseñado para ejercitar exactamente los conceptos
+anteriores. Cada ejercicio toma una de las bases de datos del Práctico 1
+y agrega usuarios y permisos sobre ella.
+
+% -----------------------------------------------------
+\subsection*{Ejercicio 1 (MySQL) --- base de Cliente/Producto/Factura}
+% -----------------------------------------------------
+
+Sobre la base \texttt{practico1a} se crean los usuarios
+\emph{vendedor1}, \emph{vendedor2} y \emph{administrador} con permisos
+muy diferenciados. La consigna combina:
+
+\begin{itemize}
+    \item \texttt{INSERT} sobre una tabla específica (vendedor1 sobre
+    \emph{cliente}; vendedor2 sobre \emph{factura}).
+    \item \texttt{SELECT} acotado a una tabla (vendedor2 sobre
+    \emph{producto}).
+    \item \texttt{UPDATE} a nivel de \textbf{columna} con
+    \texttt{WITH GRANT OPTION} (administrador sobre
+    \emph{producto.descripcion}).
+    \item \texttt{DELETE} colectivo sobre \emph{cliente} para los tres.
+    \item \texttt{REVOKE ALL} para limpiar al final los permisos del
+    vendedor2.
+\end{itemize}
+
+\paragraph{Esqueleto típico.}
+
+\begin{lstlisting}
+CREATE USER 'vendedor1'@'localhost' IDENTIFIED BY 'pwd';
+CREATE USER 'vendedor2'@'localhost' IDENTIFIED BY 'pwd';
+CREATE USER 'administrador'@'localhost' IDENTIFIED BY 'pwd';
+
+USE practico1a;
+
+GRANT INSERT ON practico1a.cliente   TO 'vendedor1'@'localhost';
+
+GRANT INSERT ON practico1a.factura   TO 'vendedor2'@'localhost';
+GRANT SELECT ON practico1a.producto  TO 'vendedor2'@'localhost';
+
+GRANT UPDATE (descripcion) ON practico1a.producto
+    TO 'administrador'@'localhost' WITH GRANT OPTION;
+
+-- DELETE para los tres.
+GRANT DELETE ON practico1a.cliente TO
+    'vendedor1'@'localhost',
+    'vendedor2'@'localhost',
+    'administrador'@'localhost';
+
+-- Verificacion y limpieza final.
+SHOW GRANTS FOR 'vendedor2'@'localhost';
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'vendedor2'@'localhost';
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection*{Ejercicio 2 (MySQL) --- base de Vehículos/Estacionamiento}
+% -----------------------------------------------------
+
+Aquí entra en juego la dimensión \emph{host}: el
+\emph{encargado\_estacionamiento} se conecta sólo desde
+\texttt{localhost} y el \emph{cobrador} desde cualquier máquina
+(\texttt{\%}). El cobrador, además, queda limitado en recursos
+con \texttt{MAX\_CONNECTIONS\_PER\_HOUR=3} y
+\texttt{MAX\_QUERIES\_PER\_HOUR=10}.
+
+\begin{lstlisting}
+CREATE USER 'encargado_estacionamiento'@'localhost' IDENTIFIED BY 'pwd';
+CREATE USER 'cobrador'@'%' IDENTIFIED BY 'pwd';
+
+GRANT SELECT, INSERT ON practico1b.parquimetro
+   TO 'encargado_estacionamiento'@'localhost';
+GRANT SELECT ON practico1b.*
+   TO 'encargado_estacionamiento'@'localhost';
+
+GRANT SELECT ON practico1b.estacionamiento TO 'cobrador'@'%';
+
+ALTER USER 'cobrador'@'%' WITH
+    MAX_CONNECTIONS_PER_HOUR 3
+    MAX_QUERIES_PER_HOUR     10;
+
+-- Inciso d).
+REVOKE SELECT ON practico1b.estacionamiento FROM 'cobrador'@'%';
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection*{Ejercicio 3 (PostgreSQL) --- base de Accidentes}
+% -----------------------------------------------------
+
+Es el ejercicio que introduce \textbf{roles compartidos}. El rol
+\emph{empleado} consolida lo común a todos (\texttt{SELECT} sobre
+\texttt{cliente(apellido, nombre)}); a partir de ahí cada usuario
+recibe los permisos específicos:
+
+\begin{itemize}
+    \item \emph{asesor}: \texttt{SELECT} en \emph{taller} e
+    \texttt{INSERT} en \emph{accidente}.
+    \item \emph{administrativo}: \texttt{SELECT} en \emph{automóvil}.
+    \item \emph{encargado}: \texttt{DROP} sobre todas las tablas y
+    \texttt{UPDATE} sobre \texttt{categoria(tasa)}.
+\end{itemize}
+
+\begin{lstlisting}
+-- Rol comun.
+CREATE ROLE empleado;
+GRANT SELECT (apellido, nombre) ON cliente TO empleado;
+
+-- Usuarios reales.
+CREATE ROLE asesor         LOGIN PASSWORD 'pwd' IN ROLE empleado;
+CREATE ROLE administrativo LOGIN PASSWORD 'pwd' IN ROLE empleado;
+CREATE ROLE encargado      LOGIN PASSWORD 'pwd' IN ROLE empleado;
+
+GRANT SELECT ON taller TO asesor;
+GRANT INSERT ON accidente TO asesor;
+GRANT SELECT ON automovil TO administrativo;
+GRANT UPDATE (tasa) ON categoria TO encargado;
+-- DROP no es un privilegio que se otorgue: se concede ownership o
+-- se ejecuta como propietario / superuser.
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection*{Ejercicio 4 (Oracle) --- base de Accidentes}
+% -----------------------------------------------------
+
+El Ejercicio 4 cierra el práctico ejercitando los aspectos más
+\emph{Oracle}: rol explícito, perfil para acotar tiempo de conexión,
+\texttt{PASSWORD EXPIRE} y \texttt{WITH GRANT OPTION} a nivel de
+columnas.
+
+\begin{lstlisting}
+-- Rol y privilegios comunes.
+CREATE ROLE empleados;
+GRANT SELECT ON automovil TO empleados;
+GRANT SELECT ON categoria TO empleados;
+
+-- Perfil para limitar al director.
+CREATE PROFILE perfil_director LIMIT
+    CONNECT_TIME 20;
+
+-- Usuarios.
+CREATE USER empleado1 IDENTIFIED BY pwd PASSWORD EXPIRE;
+CREATE USER empleado2 IDENTIFIED BY pwd;
+CREATE USER director  IDENTIFIED BY pwd PROFILE perfil_director;
+
+GRANT CONNECT TO empleado1, empleado2, director;
+GRANT empleados TO empleado1, empleado2;
+
+-- Privilegios especificos.
+GRANT INSERT, UPDATE, DELETE ON accidente TO empleado1;
+GRANT SELECT (apellido, nombre, direccion) ON cliente
+    TO empleado2 WITH GRANT OPTION;
+
+-- Director: SELECT sobre todo.
+GRANT SELECT ON cliente   TO director;
+GRANT SELECT ON automovil TO director;
+GRANT SELECT ON categoria TO director;
+GRANT SELECT ON taller    TO director;
+GRANT SELECT ON accidente TO director;
+\end{lstlisting}
+
+% =====================================================
+\section{Verificación de privilegios}
+% =====================================================
+
+Siempre que se asignan permisos hay que verificarlos. Cada motor tiene
+su forma:
+
+\begin{itemize}
+    \item \textbf{MySQL}: \texttt{SHOW GRANTS FOR 'usuario'@'host';}
+    \item \textbf{PostgreSQL}: las vistas de catálogo
+    \texttt{information\_schema.table\_privileges},
+    \texttt{column\_privileges} y \texttt{role\_table\_grants}; en
+    \texttt{psql}, los meta-comandos \texttt{\textbackslash dp} y
+    \texttt{\textbackslash z}.
+    \item \textbf{Oracle}: las vistas \texttt{USER\_TAB\_PRIVS},
+    \texttt{USER\_ROLE\_PRIVS}, \texttt{USER\_SYS\_PRIVS} y, para los
+    DBA, sus equivalentes \texttt{DBA\_*}.
+\end{itemize}
+
+Una buena práctica del práctico es \emph{loguearse efectivamente con
+cada usuario creado} y probar las operaciones permitidas (deben
+funcionar) y las prohibidas (deben fallar con error de privilegio).
+Si los \emph{tests} positivos y negativos coinciden con la consigna,
+los permisos están bien definidos.
+
+% =====================================================
+\section{Ideas clave para repasar antes del parcial}
+% =====================================================
+
+\begin{enumerate}
+    \item \textbf{DCL es el sublenguaje de seguridad.} Sus dos comandos
+    centrales son \texttt{GRANT} y \texttt{REVOKE}.
+    \item \textbf{Estándar vs implementación.} El estándar SQL define
+    usuarios, roles y privilegios; la administración real la implementa
+    cada motor. Hay que saber qué partes son comunes y qué partes
+    cambian.
+    \item \textbf{Privilegios típicos}: \texttt{SELECT}, \texttt{INSERT},
+    \texttt{UPDATE}, \texttt{DELETE}, \texttt{REFERENCES},
+    \texttt{EXECUTE}, \texttt{CREATE}, \texttt{DROP}, \texttt{ALTER},
+    \texttt{INDEX}, \texttt{CREATE VIEW}.
+    \item \textbf{Granularidad}: los privilegios pueden ser globales
+    (\texttt{*.*}), por base, por tabla o por columna. Para columnas se
+    usa la lista entre paréntesis después del nombre del privilegio.
+    \item \textbf{\texttt{WITH GRANT OPTION}} habilita la
+    \emph{delegación}: el receptor puede a su vez otorgar el privilegio
+    a otros.
+    \item \textbf{\texttt{REVOKE \dots\ CASCADE / RESTRICT}} controla
+    qué pasa con los privilegios delegados al revocar uno de ellos.
+    Por defecto el comportamiento es en cascada.
+    \item \textbf{Roles} son ``tipos de usuario''. Se crean con
+    \texttt{CREATE ROLE}, se les otorgan privilegios con \texttt{GRANT
+    \dots\ ON \dots\ TO role} y se asignan a usuarios con
+    \texttt{GRANT role TO usuario}.
+    \item \textbf{El propietario} de un objeto es siempre quien lo
+    creó. Sólo él (o un DBA) puede otorgar privilegios sobre él.
+    \item \textbf{Grafo de concesión}: existe un permiso si existe un
+    camino desde la raíz (DBA o dueño) al usuario. Si al revocar se
+    rompe el último camino, el usuario lo pierde.
+    \item \textbf{MySQL} maneja cuentas como \texttt{usuario@host} y
+    permite limitar recursos con \texttt{MAX\_QUERIES\_PER\_HOUR},
+    \texttt{MAX\_CONNECTIONS\_PER\_HOUR}, etc.
+    \item \textbf{PostgreSQL} unifica usuarios, roles y grupos: todos
+    son \emph{roles}. \texttt{LOGIN} indica que pueden iniciar sesión.
+    \item \textbf{Oracle} asocia usuario y esquema; ofrece
+    \emph{perfiles} (\texttt{CREATE PROFILE}) para limitar recursos
+    y \texttt{PASSWORD EXPIRE} para forzar cambio de clave.
+    \item \textbf{Verificar siempre}: \texttt{SHOW GRANTS} en MySQL,
+    \texttt{\textbackslash dp} en PostgreSQL, \texttt{USER\_*\_PRIVS}
+    en Oracle. Y, además, probar conectándose como cada usuario.
+\end{enumerate}
+
+% =====================================================
+\section*{Resumen final}
+% =====================================================
+\addcontentsline{toc}{section}{Resumen final}
+
+DCL es la pieza que convierte una base de datos correctamente
+estructurada (DDL) y poblada (DML) en un sistema realmente
+\emph{multiusuario} y seguro. La idea central es simple: cada
+operación debe estar respaldada por un privilegio explícito sobre el
+objeto correspondiente, y esos privilegios pueden viajar a través de
+roles (para escalar a muchos usuarios), de \texttt{WITH GRANT OPTION}
+(para delegar) y de un grafo de concesiones que ordena las relaciones
+entre quienes otorgan y reciben.
+
+Si quedan claros los cinco bloques --- usuarios, privilegios, roles,
+\texttt{WITH GRANT OPTION} con \texttt{REVOKE \dots\ CASCADE/RESTRICT}
+y la administración por motor --- el Práctico 2 se vuelve un mapeo
+directo de la teoría: cada inciso se traduce en una secuencia
+\emph{crear usuario / otorgar privilegio / verificar / revocar}. El
+verdadero examen no es escribir el comando, sino justificar por qué
+ese conjunto de permisos cumple la consigna ni más ni menos que lo
+necesario.
+
+\end{document}

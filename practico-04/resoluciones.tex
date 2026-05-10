@@ -1,0 +1,919 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas ---
+\usepackage{array}
+\usepackage{booktabs}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Trabajo Práctico N.\textsuperscript{o} 4}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={NUMERIC,VARCHAR,DECIMAL,DATE,TIMESTAMP,
+        BIGINT,VARCHAR2,NUMBER,SCHEMA,DATABASE,
+        WITH,FROM,TO,ON,AS,AND,OR,IS,NOT,NULL,
+        INSERT,UPDATE,DELETE,SELECT,PROCEDURE,FUNCTION,CALL},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+
+\lstdefinestyle{javastyle}{
+    language=Java,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+\lstdefinestyle{sqlstyle}{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+\lstdefinestyle{shellstyle}{
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt
+}
+
+\lstdefinestyle{propsstyle}{
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    morecomment=[l]{\#}
+}
+
+\lstset{style=javastyle}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+\title{Trabajo Práctico N.\textsuperscript{o} 4: JDBC\\[4pt]
+       \large Bases de Datos II}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Trabajo Práctico N.\textsuperscript{o} 4}}\\[6pt]
+    {\large JDBC --- Conexión a bases desde Java}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Resolución usando la API \texttt{java.sql} (JDBC) sobre las
+    bases creadas en los Prácticos 1 y 3.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introducción}
+% =====================================================
+
+El Práctico 4 cierra el bloque de fundamentos del cuatrimestre
+moviéndose desde SQL puro hacia el \emph{cliente}: cómo se accede a
+las bases que armamos en prácticos anteriores desde una aplicación
+Java mediante la API \textbf{JDBC} (\emph{Java DataBase
+Connectivity}). Los tres ejercicios cubren los tres usos canónicos de
+JDBC:
+
+\begin{itemize}
+    \item \textbf{Ejercicio 1}: \texttt{PreparedStatement} para alta y
+    \texttt{ResultSet} para listado, sobre la base de
+    facturación del Práctico 1.a (MySQL y PostgreSQL).
+    \item \textbf{Ejercicio 2}: \texttt{CallableStatement} para
+    invocar la función \texttt{fn\_actualizar\_cotizacion\_maxima}
+    creada en el Práctico 3, sobre PostgreSQL.
+    \item \textbf{Ejercicio 3}: \texttt{DatabaseMetaData} para listar
+    tablas, columnas, claves primarias, únicas y foráneas de la base
+    del Práctico 1.c, en PostgreSQL y Oracle.
+\end{itemize}
+
+Toda la solución está organizada como tres aplicaciones de consola
+independientes, sin frameworks de persistencia (ni Hibernate ni
+JPA): JDBC ``pelado'' como pide el enunciado.
+
+\begin{nota}
+\textbf{Convenciones de proyecto.} Cada ejercicio vive en su propia
+carpeta (\texttt{ejercicio-01}, \texttt{ejercicio-02},
+\texttt{ejercicio-03}) con la misma estructura: \texttt{src/}
+(código), \texttt{lib/} (drivers JDBC), \texttt{config/}
+(\texttt{*.properties}) y un \texttt{README.md} con las instrucciones
+de compilación y ejecución. Los datos sensibles (host, usuario,
+clave) viven en los \texttt{.properties}, no en el código.
+\end{nota}
+
+\subsection*{Verificación de las resoluciones existentes}
+
+Antes de redactar este documento se revisaron las tres resoluciones.
+Conclusiones:
+
+\begin{itemize}
+    \item Todas usan \texttt{try-with-resources} para cerrar
+    \texttt{Connection}, \texttt{PreparedStatement} y
+    \texttt{ResultSet}.
+    \item Las consultas son siempre parametrizadas
+    (\texttt{PreparedStatement}/\texttt{CallableStatement}); no hay
+    concatenación insegura.
+    \item Cada aplicación carga el driver con
+    \texttt{Class.forName(\dots)} y establece la conexión con
+    \texttt{DriverManager.getConnection(\dots)}.
+    \item La configuración se externaliza en archivos
+    \texttt{.properties}, lo que permite cambiar de motor sin
+    recompilar.
+    \item En el Ejercicio 2 se deja un \emph{fallback} con
+    \texttt{SELECT * FROM funcion(\dots)} para los entornos en los
+    que el escape \texttt{\{ ? = call \dots\ \}} no funciona en
+    PostgreSQL.
+    \item En el Ejercicio 3 se separa la carga de tablas del
+    armado de la información por tabla, y se descartan los índices
+    que coinciden con la PK al listar las claves únicas.
+\end{itemize}
+
+No se encontraron errores. Lo que sigue documenta cada solución
+explicando las decisiones de diseño y los métodos JDBC involucrados.
+
+% =====================================================
+\section{Ejercicio 1: Alta y listado de clientes (JDBC)}
+% =====================================================
+
+\paragraph{Enunciado.} Sobre la base del ejercicio 1.a del Práctico 1
+(facturación), implementar en Java por consola dos operaciones:
+\emph{alta} de un cliente y \emph{listado} de todos los clientes
+cargados. Hay que resolverlo sobre los motores donde se creó la base
+(MySQL y PostgreSQL).
+
+\subsection*{Estructura de la solución}
+
+Tres clases en el paquete
+\texttt{ar.edu.unrc.bd2.practico4.ej1}:
+
+\begin{itemize}
+    \item \texttt{Cliente}: \emph{value object} inmutable con los
+    cinco campos del cliente.
+    \item \texttt{ClienteDao}: encapsula el acceso a JDBC. Recibe la
+    \texttt{Connection} desde afuera (no la administra) y expone dos
+    métodos: \texttt{insertar} y \texttt{listar}.
+    \item \texttt{ClientesCliApp}: el \texttt{main}, que carga la
+    configuración, abre la conexión y ofrece un menú de consola.
+    \item \texttt{DbConfig}: lee el \texttt{.properties} y expone el
+    nombre completo de la tabla (\texttt{practico1a.cliente} o
+    \texttt{practico1a\_mysql.cliente}).
+\end{itemize}
+
+\subsection*{Configuración por motor (\texttt{.properties})}
+
+\begin{lstlisting}[style=propsstyle]
+# config/db.postgres.properties
+db.driver=org.postgresql.Driver
+db.url=jdbc:postgresql://localhost:5432/postgres
+db.user=postgres
+db.password=root
+db.table.cliente=practico1a.cliente
+\end{lstlisting}
+
+\begin{lstlisting}[style=propsstyle]
+# config/db.mysql.properties
+db.driver=com.mysql.cj.jdbc.Driver
+db.url=jdbc:mysql://localhost:3306/practico1a_mysql
+db.user=root
+db.password=root
+db.table.cliente=cliente
+\end{lstlisting}
+
+\subsection*{Apertura de la conexión}
+
+El método \texttt{createConnection()} de \texttt{DbConfig} sigue el
+patrón clásico:
+
+\begin{lstlisting}
+public Connection createConnection() throws SQLException, ClassNotFoundException {
+    Class.forName(driverClass);
+    return DriverManager.getConnection(url, user, password);
+}
+\end{lstlisting}
+
+\paragraph{Por qué \texttt{Class.forName}.} Aunque desde JDBC 4.x los
+drivers se registran automáticamente vía \texttt{ServiceLoader},
+forzar la carga con \texttt{Class.forName} es la forma robusta y
+explícita que muestra el teórico, y evita problemas si el driver no
+está empaquetado con \texttt{META-INF/services}.
+
+\subsection*{Acceso a datos: \texttt{ClienteDao}}
+
+\begin{lstlisting}
+public int insertar(Connection connection, Cliente cliente) throws SQLException {
+    String sql = "INSERT INTO " + clienteTable
+        + " (nro_cliente, apellido, nombre, direccion, telefono) VALUES (?, ?, ?, ?, ?)";
+
+    try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+        preparedStatement.setInt(1, cliente.getNroCliente());
+        preparedStatement.setString(2, cliente.getApellido());
+        preparedStatement.setString(3, cliente.getNombre());
+        preparedStatement.setString(4, cliente.getDireccion());
+        preparedStatement.setString(5, cliente.getTelefono());
+        return preparedStatement.executeUpdate();
+    }
+}
+
+public List<Cliente> listar(Connection connection) throws SQLException {
+    String sql = "SELECT nro_cliente, apellido, nombre, direccion, telefono FROM "
+        + clienteTable + " ORDER BY nro_cliente";
+
+    List<Cliente> clientes = new ArrayList<>();
+
+    try (PreparedStatement preparedStatement = connection.prepareStatement(sql);
+         ResultSet resultSet = preparedStatement.executeQuery()) {
+
+        while (resultSet.next()) {
+            clientes.add(new Cliente(
+                resultSet.getInt("nro_cliente"),
+                resultSet.getString("apellido"),
+                resultSet.getString("nombre"),
+                resultSet.getString("direccion"),
+                resultSet.getString("telefono")
+            ));
+        }
+    }
+    return clientes;
+}
+\end{lstlisting}
+
+\paragraph{Lectura del código.}
+
+\begin{itemize}
+    \item Las dos sentencias se construyen con \texttt{?} como
+    placeholders. Después se asignan los valores con
+    \texttt{setInt}/\texttt{setString} sobre el
+    \texttt{PreparedStatement}. Esto es lo que protege contra
+    \emph{SQL Injection}: el motor recibe la sentencia y los valores
+    por separado.
+    \item \texttt{executeUpdate} se usa para \texttt{INSERT}: devuelve
+    la cantidad de filas afectadas. Se espera \texttt{1} para un alta
+    correcta.
+    \item \texttt{executeQuery} se usa para \texttt{SELECT}: devuelve
+    un \texttt{ResultSet}.
+    \item El \texttt{ResultSet} se recorre con
+    \texttt{while (rs.next())}. \texttt{next()} avanza el cursor a la
+    siguiente fila y devuelve \texttt{false} cuando no hay más.
+    \item Se usan \texttt{getInt(\dots)} y \texttt{getString(\dots)}
+    \emph{por nombre de columna}. Es menos eficiente que por índice
+    pero deja el código más legible y robusto frente a cambios en el
+    orden de las columnas.
+    \item Todo se rodea con \texttt{try-with-resources} para que el
+    \texttt{Statement} y el \texttt{ResultSet} se cierren incluso si
+    salta una excepción.
+\end{itemize}
+
+\subsection*{Menú de consola}
+
+\begin{lstlisting}
+private static void ejecutarMenu(Scanner scanner, Connection connection,
+                                 ClienteDao clienteDao) {
+    boolean salir = false;
+    while (!salir) {
+        mostrarMenu();
+        String opcion = scanner.nextLine().trim();
+        switch (opcion) {
+            case "1": altaCliente(scanner, connection, clienteDao); break;
+            case "2": listarClientes(connection, clienteDao); break;
+            case "0": salir = true; break;
+            default:  System.out.println("Opcion invalida.");
+        }
+    }
+}
+\end{lstlisting}
+
+\paragraph{Manejo de errores.} El alta atrapa
+\texttt{NumberFormatException} (cuando \texttt{nro\_cliente} no es
+entero) y \texttt{SQLException} (cuando, por ejemplo, se viola la
+\texttt{UNIQUE} sobre \texttt{telefono} del Práctico 1.a). El
+listado simplemente reporta el error SQL si llega a ocurrir.
+
+\subsection*{Compilación y ejecución}
+
+\begin{lstlisting}[style=shellstyle]
+# Desde practico-04/ejercicio-01
+mkdir -p out
+javac -d out src/main/java/ar/edu/unrc/bd2/practico4/ej1/*.java
+
+# PostgreSQL
+java -cp "out:lib/*" \
+    ar.edu.unrc.bd2.practico4.ej1.ClientesCliApp \
+    config/db.postgres.properties
+
+# MySQL
+java -cp "out:lib/*" \
+    ar.edu.unrc.bd2.practico4.ej1.ClientesCliApp \
+    config/db.mysql.properties
+\end{lstlisting}
+
+% =====================================================
+\section{Ejercicio 2: Invocar la función de máxima cotización}
+% =====================================================
+
+\paragraph{Enunciado.} Programa Java que invoque la función
+\texttt{fn\_actualizar\_cotizacion\_maxima} del Práctico 3, ejercicio
+2, mostrando los parámetros de salida.
+
+\subsection*{Estructura de la solución}
+
+\begin{itemize}
+    \item \texttt{CotizacionMaximaApp}: el \texttt{main}; lee el
+    \texttt{cod\_banco} (de argumento o por consola), invoca el
+    \emph{service}, imprime el resultado y consulta la fila
+    actualizada.
+    \item \texttt{CotizacionMaximaService}: encapsula la invocación
+    JDBC. Tiene dos caminos: \texttt{CallableStatement} (preferido) y
+    \texttt{SELECT * FROM funcion(?)} (\emph{fallback}).
+    \item \texttt{DbConfig}: lee \texttt{db.driver}, \texttt{db.url},
+    \texttt{db.user}, \texttt{db.password},
+    \texttt{db.function.call}, \texttt{db.function.select} y
+    \texttt{db.query.banco}.
+\end{itemize}
+
+\subsection*{Configuración (\texttt{db.postgres.properties})}
+
+\begin{lstlisting}[style=propsstyle]
+db.driver=org.postgresql.Driver
+db.url=jdbc:postgresql://127.0.0.1:5432/postgres
+db.user=postgres
+db.password=
+
+# Invocacion principal por CallableStatement (parametro OUT en posicion 1).
+db.function.call={ ? = call practico3_ej2.fn_actualizar_cotizacion_maxima(?) }
+
+# Fallback por SELECT (compatible con cualquier driver/PostgreSQL).
+db.function.select=SELECT * FROM practico3_ej2.fn_actualizar_cotizacion_maxima(?)
+
+# Verificacion posterior de la fila actualizada.
+db.query.banco=SELECT cod_banco, nombre, cotizacion_maxima FROM practico3_ej2.banco WHERE cod_banco = ?
+\end{lstlisting}
+
+\subsection*{\texttt{CallableStatement} en PostgreSQL}
+
+La sintaxis estándar JDBC para llamar a un \emph{stored procedure}
+con un parámetro \texttt{OUT} es el \emph{escape call}:
+\texttt{\{ ? = call func(?) \}}. JDBC numera los parámetros desde
+1; si la función tiene un \texttt{OUT}, se registra primero con
+\texttt{registerOutParameter}.
+
+\begin{lstlisting}
+private BigDecimal invocarConCallableStatement(int codBanco, Connection connection)
+        throws SQLException {
+    try (CallableStatement callableStatement =
+             connection.prepareCall(dbConfig.getFunctionCall())) {
+        callableStatement.registerOutParameter(1, Types.NUMERIC);
+        callableStatement.setInt(2, codBanco);
+        callableStatement.execute();
+        return callableStatement.getBigDecimal(1);
+    }
+}
+\end{lstlisting}
+
+\paragraph{Detalles.}
+
+\begin{itemize}
+    \item \texttt{prepareCall} es el método de \texttt{Connection}
+    para crear un \texttt{CallableStatement}.
+    \item \texttt{registerOutParameter(1, Types.NUMERIC)} le dice al
+    driver que el primer placeholder es de salida y de tipo
+    \texttt{NUMERIC} (el tipo SQL de \texttt{cotizacion\_maxima}). La
+    constante viene de \texttt{java.sql.Types}.
+    \item \texttt{setInt(2, codBanco)} coloca el segundo parámetro
+    (entrada \texttt{p\_cod\_banco}).
+    \item \texttt{execute()} corre la llamada.
+    \item \texttt{getBigDecimal(1)} lee el valor de salida en el
+    placeholder 1 como \texttt{BigDecimal} (la correspondencia natural
+    de \texttt{NUMERIC} en Java; ver Tabla de tipos del Teórico 5).
+\end{itemize}
+
+\subsection*{\emph{Fallback} con \texttt{SELECT}}
+
+Algunos drivers/versiones de PostgreSQL no aceptan el escape call
+estándar para funciones que devuelven valor escalar. Para esos casos
+está el camino alternativo:
+
+\begin{lstlisting}
+private BigDecimal invocarConSelect(int codBanco, Connection connection)
+        throws SQLException {
+    try (PreparedStatement preparedStatement =
+             connection.prepareStatement(dbConfig.getFunctionSelect())) {
+        preparedStatement.setInt(1, codBanco);
+        try (ResultSet resultSet = preparedStatement.executeQuery()) {
+            if (!resultSet.next()) {
+                throw new SQLException("La funcion no retorno filas de salida.");
+            }
+            return resultSet.getBigDecimal(1);
+        }
+    }
+}
+\end{lstlisting}
+
+El \emph{service} prueba primero \texttt{CallableStatement} y, si
+algo falla, cae al \texttt{SELECT}:
+
+\begin{lstlisting}
+public BigDecimal invocarFuncion(int codBanco, Connection connection) throws SQLException {
+    try {
+        return invocarConCallableStatement(codBanco, connection);
+    } catch (SQLException e) {
+        return invocarConSelect(codBanco, connection);
+    }
+}
+\end{lstlisting}
+
+\subsection*{Verificación posterior}
+
+Después de invocar la función, el programa lee la fila de
+\texttt{banco} para confirmar que la columna
+\texttt{cotizacion\_maxima} quedó con el mismo valor devuelto:
+
+\begin{lstlisting}
+public BancoCotizacion consultarBanco(int codBanco, Connection connection) throws SQLException {
+    try (PreparedStatement preparedStatement =
+             connection.prepareStatement(dbConfig.getBancoQuery())) {
+        preparedStatement.setInt(1, codBanco);
+        try (ResultSet resultSet = preparedStatement.executeQuery()) {
+            if (!resultSet.next()) return null;
+            return new BancoCotizacion(
+                resultSet.getInt("cod_banco"),
+                resultSet.getString("nombre"),
+                resultSet.getBigDecimal("cotizacion_maxima")
+            );
+        }
+    }
+}
+\end{lstlisting}
+
+\subsection*{Salida esperada}
+
+\begin{lstlisting}[style=shellstyle]
+Funcion invocada: practico3_ej2.fn_actualizar_cotizacion_maxima
+Parametro IN  p_cod_banco         = 1
+Parametro OUT p_cotizacion_maxima = 1245.7500
+Banco actualizado -> cod_banco=1, nombre=Banco Rio, cotizacion_maxima=1245.7500
+\end{lstlisting}
+
+\subsection*{Compilación y ejecución}
+
+\begin{lstlisting}[style=shellstyle]
+# Desde practico-04/ejercicio-02
+mkdir -p out
+javac -d out src/main/java/ar/edu/unrc/bd2/practico4/ej2/*.java
+
+# Interactivo: pide cod_banco por consola.
+java -cp "out:lib/*" \
+    ar.edu.unrc.bd2.practico4.ej2.CotizacionMaximaApp \
+    config/db.postgres.properties
+
+# O con cod_banco como segundo argumento.
+java -cp "out:lib/*" \
+    ar.edu.unrc.bd2.practico4.ej2.CotizacionMaximaApp \
+    config/db.postgres.properties 1
+\end{lstlisting}
+
+% =====================================================
+\section{Ejercicio 3: Listado de metadatos (PK, UQ, FK)}
+% =====================================================
+
+\paragraph{Enunciado.} Programa Java que liste, para la base del
+Práctico 1.c (clientes, automóviles, accidentes), las tablas, sus
+columnas, claves primarias, claves únicas y claves foráneas. Debe
+funcionar sobre los motores en los que se creó la base (PostgreSQL y
+Oracle).
+
+\subsection*{Estructura de la solución}
+
+\begin{itemize}
+    \item \texttt{MetadataExplorerApp}: \texttt{main} mínimo. Abre la
+    conexión, obtiene el \texttt{DatabaseMetaData} y delega en el
+    \emph{reporter}.
+    \item \texttt{MetadataReporter}: hace todo el trabajo de
+    extracción y formateo, dividido en cinco pasos
+    (cargar tablas, columnas, PK, UQ, FK).
+    \item \texttt{DbConfig}: filtros para
+    \texttt{DatabaseMetaData.getTables} (\texttt{catalog},
+    \texttt{schemaPattern}, \texttt{tableNamePattern},
+    \texttt{tableTypes}).
+\end{itemize}
+
+\subsection*{Configuración por motor}
+
+\begin{lstlisting}[style=propsstyle]
+# config/db.postgres.properties
+db.driver=org.postgresql.Driver
+db.url=jdbc:postgresql://127.0.0.1:5432/postgres
+db.user=postgres
+db.password=
+
+db.catalog=
+db.schemaPattern=practico1c
+db.tableNamePattern=%
+db.table.types=TABLE
+\end{lstlisting}
+
+\begin{lstlisting}[style=propsstyle]
+# config/db.oracle.properties
+db.driver=oracle.jdbc.OracleDriver
+db.url=jdbc:oracle:thin:@//localhost:1521/XE
+db.user=PRACTICO1C
+db.password=PRACTICO1C
+
+# En Oracle, el "schema" es el usuario; debe ir en MAYUSCULAS.
+db.catalog=
+db.schemaPattern=PRACTICO1C
+db.tableNamePattern=%
+db.table.types=TABLE
+\end{lstlisting}
+
+\paragraph{Por qué los filtros distintos por motor.} En PostgreSQL se
+usa el esquema \texttt{practico1c} dentro de la base
+\texttt{postgres}. En Oracle no hay ``schema'' separado del usuario:
+el esquema es el dueño y los nombres viajan en mayúsculas
+(\texttt{PRACTICO1C}). Por eso cada \texttt{.properties} usa el valor
+correspondiente.
+
+\subsection*{Carga de tablas}
+
+\begin{lstlisting}
+private List<TableRef> loadTables(DatabaseMetaData metaData, DbConfig config)
+        throws SQLException {
+    List<TableRef> tables = new ArrayList<>();
+    try (ResultSet rs = metaData.getTables(
+            config.getCatalog(),
+            config.getSchemaPattern(),
+            config.getTableNamePattern(),
+            config.getTableTypes())) {
+        while (rs.next()) {
+            tables.add(new TableRef(
+                rs.getString("TABLE_CAT"),
+                rs.getString("TABLE_SCHEM"),
+                rs.getString("TABLE_NAME")
+            ));
+        }
+    }
+    tables.sort(Comparator
+        .comparing((TableRef t) -> nullSafe(t.schema))
+        .thenComparing(t -> nullSafe(t.name)));
+    return tables;
+}
+\end{lstlisting}
+
+\paragraph{Métodos JDBC usados.}
+
+\begin{itemize}
+    \item \texttt{getTables(catalog, schemaPattern, tableNamePattern,
+    types)}: devuelve las tablas filtradas. Las columnas
+    \texttt{TABLE\_CAT}, \texttt{TABLE\_SCHEM}, \texttt{TABLE\_NAME} y
+    \texttt{TABLE\_TYPE} están definidas por el estándar JDBC, así
+    que el código no depende del motor.
+    \item Se ordena por esquema y nombre para imprimir el reporte
+    estable.
+\end{itemize}
+
+\subsection*{Columnas}
+
+\begin{lstlisting}
+private void printColumns(DatabaseMetaData metaData, TableRef table) throws SQLException {
+    try (ResultSet rs = metaData.getColumns(table.catalog, table.schema, table.name, "%")) {
+        while (rs.next()) {
+            String columnName = rs.getString("COLUMN_NAME");
+            String typeName = rs.getString("TYPE_NAME");
+            int dataType = rs.getInt("DATA_TYPE");
+            int size = rs.getInt("COLUMN_SIZE");
+            int decimalDigits = rs.getInt("DECIMAL_DIGITS");
+            String nullable = rs.getString("IS_NULLABLE");
+
+            String typeDescription = buildTypeDescription(typeName, dataType, size, decimalDigits);
+            String nullDescription = "YES".equalsIgnoreCase(nullable) ? "NULL" : "NOT NULL";
+
+            System.out.println("- " + columnName + " : " + typeDescription
+                + " (" + nullDescription + ")");
+        }
+    }
+}
+\end{lstlisting}
+
+\paragraph{Detalles.}
+
+\begin{itemize}
+    \item \texttt{getColumns(catalog, schema, table, columnPattern)}.
+    \item \texttt{DATA\_TYPE} es un código de \texttt{java.sql.Types};
+    \texttt{TYPE\_NAME} el nombre nativo del motor
+    (\texttt{VARCHAR2}, \texttt{NUMBER}, \texttt{NUMERIC}\dots).
+    \item \texttt{IS\_NULLABLE} es ``\texttt{YES}'' o
+    ``\texttt{NO}''.
+    \item \texttt{buildTypeDescription} reconstruye la representación
+    legible: \texttt{VARCHAR(120)} o \texttt{NUMBER(10,2)} según el
+    tipo. Sólo agrega tamaños cuando tienen sentido (cadenas y
+    numéricos exactos).
+\end{itemize}
+
+\subsection*{Clave primaria}
+
+\begin{lstlisting}
+private void printPrimaryKey(DatabaseMetaData metaData, TableRef table) throws SQLException {
+    Map<Short, String> pkColumns = new TreeMap<>();
+    String pkName = null;
+
+    try (ResultSet rs = metaData.getPrimaryKeys(table.catalog, table.schema, table.name)) {
+        while (rs.next()) {
+            pkName = rs.getString("PK_NAME");
+            short keySeq = rs.getShort("KEY_SEQ");
+            pkColumns.put(keySeq, rs.getString("COLUMN_NAME"));
+        }
+    }
+
+    if (pkColumns.isEmpty()) {
+        System.out.println("PK:\n- (sin clave primaria)");
+        return;
+    }
+    System.out.println("PK:\n- " + (pkName != null ? pkName : "(sin nombre)")
+        + " " + new ArrayList<>(pkColumns.values()));
+}
+\end{lstlisting}
+
+\paragraph{\texttt{KEY\_SEQ}.} La PK puede ser compuesta. Cada fila
+del \texttt{ResultSet} representa una columna y trae \texttt{KEY\_SEQ}
+con el orden dentro de la PK. Por eso se usa \texttt{TreeMap<Short,
+String>}: ordena automáticamente por esa clave.
+
+\subsection*{Claves únicas}
+
+JDBC no tiene un \texttt{getUniqueKeys}. Hay que pedir todos los
+índices y filtrar los \emph{no únicos} y los que coinciden con la PK
+(la PK ya genera un índice único pero no es una ``clave única
+adicional''):
+
+\begin{lstlisting}
+try (ResultSet rs = metaData.getIndexInfo(table.catalog, table.schema, table.name,
+        /* unique = */ true, /* approximate = */ false)) {
+    while (rs.next()) {
+        short type = rs.getShort("TYPE");
+        if (type == DatabaseMetaData.tableIndexStatistic) continue;
+
+        String indexName = rs.getString("INDEX_NAME");
+        String columnName = rs.getString("COLUMN_NAME");
+        short ordinalPosition = rs.getShort("ORDINAL_POSITION");
+        // ...
+        uniqueIndexes.computeIfAbsent(indexName, k -> new TreeMap<>())
+            .put(ordinalPosition, columnName);
+    }
+}
+\end{lstlisting}
+
+Después se descartan los índices únicos que tengan \emph{exactamente}
+las mismas columnas que la PK. Si el resultado queda vacío, se
+imprime ``\texttt{(sin claves unicas adicionales)}''.
+
+\subsection*{Claves foráneas}
+
+\begin{lstlisting}
+try (ResultSet rs = metaData.getImportedKeys(table.catalog, table.schema, table.name)) {
+    while (rs.next()) {
+        String fkName = rs.getString("FK_NAME");
+        short keySeq  = rs.getShort("KEY_SEQ");
+        FkPart part = new FkPart(
+            rs.getString("FKCOLUMN_NAME"),
+            rs.getString("PKTABLE_SCHEM"),
+            rs.getString("PKTABLE_NAME"),
+            rs.getString("PKCOLUMN_NAME")
+        );
+        groupedFks.computeIfAbsent(fkName, k -> new TreeMap<>()).put(keySeq, part);
+    }
+}
+\end{lstlisting}
+
+\paragraph{Detalles.}
+
+\begin{itemize}
+    \item \texttt{getImportedKeys} devuelve las FK \emph{salientes} de
+    la tabla (las que esta tabla declara hacia otras).
+    \texttt{getExportedKeys} sería el camino inverso.
+    \item Una FK puede ser compuesta; \texttt{KEY\_SEQ} ordena las
+    columnas. Para imprimirla se reconstruye una línea del tipo
+    \texttt{[fkCol1, fkCol2] -> esquema.tabla [pkCol1, pkCol2]}.
+\end{itemize}
+
+\subsection*{Punto de entrada}
+
+\begin{lstlisting}
+public static void main(String[] args) {
+    String configPath = args.length > 0 ? args[0] : "config/db.postgres.properties";
+    DbConfig config;
+    try {
+        config = DbConfig.fromFile(configPath);
+    } catch (IOException | IllegalArgumentException e) {
+        System.err.println("Error cargando config: " + e.getMessage());
+        System.exit(1); return;
+    }
+
+    try (Connection connection = config.openConnection()) {
+        DatabaseMetaData metaData = connection.getMetaData();
+        System.out.println("Conexion OK -> "
+            + metaData.getDatabaseProductName() + " "
+            + metaData.getDatabaseProductVersion());
+
+        new MetadataReporter().printMetadata(metaData, config);
+
+    } catch (ClassNotFoundException e) { /* ... */ }
+      catch (SQLException e) { /* ... */ }
+}
+\end{lstlisting}
+
+\subsection*{Compilación y ejecución}
+
+\begin{lstlisting}[style=shellstyle]
+# Desde practico-04/ejercicio-03
+mkdir -p out
+javac -d out src/main/java/ar/edu/unrc/bd2/practico4/ej3/*.java
+
+# PostgreSQL
+java -cp "out:lib/*" \
+    ar.edu.unrc.bd2.practico4.ej3.MetadataExplorerApp \
+    config/db.postgres.properties
+
+# Oracle
+java -cp "out:lib/*" \
+    ar.edu.unrc.bd2.practico4.ej3.MetadataExplorerApp \
+    config/db.oracle.properties
+\end{lstlisting}
+
+\subsection*{Ejemplo de salida}
+
+\begin{lstlisting}[style=shellstyle]
+Conexion OK -> PostgreSQL 14.10
+============================================================
+Tabla: practico1c.cliente
+============================================================
+Columnas:
+- dni : INT4 (NOT NULL)
+- nombre : VARCHAR(60) (NOT NULL)
+- apellido : VARCHAR(60) (NOT NULL)
+- direccion : VARCHAR(120) (NULL)
+- tarifa : INT4 (NOT NULL)
+PK:
+- pk_cliente [dni]
+Claves unicas:
+- (sin claves unicas adicionales)
+Claves foraneas:
+- (sin claves foraneas)
+
+============================================================
+Tabla: practico1c.accidente
+============================================================
+...
+Claves foraneas:
+- fk_acc_cliente   [dni]      -> practico1c.cliente   [dni]
+- fk_acc_taller    [nro_taller] -> practico1c.taller  [nro_taller]
+- fk_acc_automovil [patente]  -> practico1c.automovil [patente]
+\end{lstlisting}
+
+% =====================================================
+\section{Decisiones transversales}
+% =====================================================
+
+\begin{itemize}
+    \item \textbf{Sin frameworks ORM.} Se usan únicamente clases del
+    paquete \texttt{java.sql} (\texttt{Connection},
+    \texttt{PreparedStatement}, \texttt{CallableStatement},
+    \texttt{ResultSet}, \texttt{DatabaseMetaData}). Nada de Hibernate,
+    JPA, Spring Data ni similares: el enunciado pide JDBC.
+    \item \textbf{Recursos cerrados con \texttt{try-with-resources}.}
+    El compilador genera el \texttt{finally} con \texttt{close()},
+    incluso si el cuerpo lanza excepción. Es el patrón seguro y
+    preferido desde Java 7.
+    \item \textbf{Configuración externa.} \texttt{driver},
+    \texttt{url}, \texttt{user}, \texttt{password} y los nombres de
+    tabla/función viven en \texttt{.properties}. El binario es
+    independiente del entorno.
+    \item \textbf{Independencia de motor donde tiene sentido.} El
+    Ejercicio 1 cambia entre MySQL y PostgreSQL sólo cambiando el
+    \texttt{.properties}; el Ejercicio 3, entre PostgreSQL y Oracle.
+    \item \textbf{Mensajes de error útiles.} En todos los casos se
+    diferencian tres errores típicos: \texttt{ClassNotFoundException}
+    (driver ausente), \texttt{IOException} (archivo
+    \texttt{.properties} mal o ausente) y \texttt{SQLException}
+    (problema con la base o la sentencia).
+\end{itemize}
+
+\section*{Conclusión}
+\addcontentsline{toc}{section}{Conclusión}
+
+Los tres ejercicios cubren los tres patrones canónicos de uso de
+JDBC: \emph{ABM con \texttt{PreparedStatement}}, \emph{invocación de
+stored procedure con \texttt{CallableStatement}} y \emph{exploración
+de metadatos con \texttt{DatabaseMetaData}}. La estructura repetida
+en los tres (\texttt{App} + \texttt{Service/DAO} + \texttt{DbConfig}
++ \texttt{.properties}) simplifica leer y comparar las soluciones
+y deja claro cómo cambia la API según el caso de uso.
+
+\end{document}

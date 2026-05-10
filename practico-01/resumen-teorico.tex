@@ -1,0 +1,1049 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Resumen Teórico --- Práctico N.\textsuperscript{o} 1}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={NUMERIC,VARCHAR,DECIMAL,DATE,TIMESTAMP,TIME,
+        BIGINT,VARCHAR2,NUMBER,ENUM,SCHEMA,SEQUENCE,TRIGGER,
+        BEFORE,EACH,ROW,NEXTVAL,DUAL,RAISE,EXCEPTION,LOOP,
+        IDENTIFIED,QUOTA,UNLIMITED,USERS,TABLESPACE,
+        DATABASE,DOMAIN,GRANT,REVOKE,ROLE,USER,LOGIN,NOLOGIN,
+        OPTION,REFERENCES,RESTRICT,CASCADE,
+        AUTO\_INCREMENT,IF,EXISTS,ALTER,SHOW,USE,
+        SEARCH\_PATH,EXECUTE,IMMEDIATE},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstset{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+\title{Resumen Teórico --- Práctico N.\textsuperscript{o} 1: Repaso de SQL\\[4pt]
+       \large Bases de Datos II}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Resumen Teórico}}\\[6pt]
+    {\large Práctico N.\textsuperscript{o} 1 --- Repaso de SQL}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Material elaborado a partir de los teóricos
+    \emph{Teorico\_1\_Introduccion} y \emph{Teorico\_2\_Repaso\_SQL}
+    de la cátedra y de las resoluciones del práctico.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introducción}
+% =====================================================
+
+Bases de Datos II retoma los conceptos relacionales de Bases de Datos I y los
+profundiza hacia la administración real de motores: optimización, transacciones,
+concurrencia, programación en el servidor (procedimientos almacenados,
+\emph{triggers}), \mbox{XML/JSON}, bases NoSQL, bases geográficas e inteligencia
+de negocios. El primer práctico es un \textbf{repaso integral de SQL} que se
+apoya en los dos primeros teóricos de la materia y deja preparada la base
+sobre la cual se construirán los temas posteriores.
+
+El práctico tiene tres focos claros: definir esquemas con DDL respetando las
+restricciones del enunciado, poblarlos con datos coherentes mediante DML y
+escribir consultas combinando filtros, \emph{joins}, agrupamiento y agregación.
+Como detalle no menor, el práctico se resuelve sobre los tres motores que la
+cátedra exige manejar: \textbf{MySQL 8+}, \textbf{PostgreSQL 14+} y
+\textbf{Oracle 10/11 XE}.
+
+\begin{nota}
+\textbf{Idea clave.} Aunque el SQL estándar es uno solo, cada motor tiene
+diferencias prácticas importantes (autoincrement, tipos numéricos, dominios,
+manejo de esquemas, etc.). Aprender a leer SQL en el estándar y traducirlo
+a cada motor es uno de los objetivos centrales del práctico.
+\end{nota}
+
+% =====================================================
+\section{SQL: visión general}
+% =====================================================
+
+\textbf{SQL} (\emph{Structured Query Language}) es el lenguaje estándar para
+organizar, gestionar y recuperar datos en bases de datos relacionales.
+Históricamente nació como \emph{SEQUEL} en un prototipo de IBM y fue luego
+estandarizado por ANSI e ISO. Con el tiempo el estándar incorporó
+\emph{triggers} (SQL:1999), interacción con XML (SQL:2005), funciones
+polimórficas, JSON y funciones trigonométricas (SQL:2016), entre otras
+extensiones. En paralelo, los motores comerciales (Oracle, SQL Server,
+PostgreSQL, MySQL) ofrecen sus propias variantes y agregan funcionalidades
+fuera del estándar.
+
+SQL se divide tradicionalmente en tres sublenguajes:
+
+\begin{description}[leftmargin=2.2cm,style=nextline]
+    \item[\textbf{DML} (Data Manipulation Language)]
+    Manipulación de datos: consultas (\texttt{SELECT}) basadas en álgebra
+    relacional, e inserción, modificación y borrado de filas
+    (\texttt{INSERT}, \texttt{UPDATE}, \texttt{DELETE}).
+
+    \item[\textbf{DDL} (Data Definition Language)]
+    Definición de la estructura: creación, modificación y borrado de tablas,
+    dominios, índices, vistas y demás objetos del esquema
+    (\texttt{CREATE}, \texttt{ALTER}, \texttt{DROP}).
+
+    \item[\textbf{DCL} (Data Control Language)]
+    Control de acceso y permisos sobre los objetos
+    (\texttt{GRANT}, \texttt{REVOKE}). Es el foco del Práctico 2,
+    pero conviene reconocerlo desde ahora para ubicar cada sentencia
+    en su categoría.
+\end{description}
+
+El Práctico 1 trabaja casi exclusivamente con \textbf{DDL} (Ejercicio 1)
+y \textbf{DML} (Ejercicios 2 y 3).
+
+% =====================================================
+\section{DML: manipulación de datos}
+% =====================================================
+
+% -----------------------------------------------------
+\subsection{La sentencia \texttt{SELECT}}
+% -----------------------------------------------------
+
+\texttt{SELECT} es el comando más usado de SQL. Recupera datos de una o varias
+tablas y se organiza en seis cláusulas, dos obligatorias y cuatro opcionales:
+
+\begin{lstlisting}
+SELECT [ALL|DISTINCT] { * | expr_columna_1 [AS alias_1] [, ...] }
+  FROM nombre_tabla_1 [alias_1] [, nombre_tabla_n [alias_n]]
+ [WHERE  condicionWhere]
+ [GROUP BY expr_columna_group1 [, expr_columna_group2] [...]]
+ [HAVING  condicionHaving]
+ [{UNION [ALL] | INTERSECT | EXCEPT} SELECT ...]
+ [ORDER BY nombre_campo_1 [ASC|DESC] [, nombre_campo_2 [ASC|DESC]]];
+\end{lstlisting}
+
+Conceptualmente, el orden \emph{lógico} en que el motor evalúa una consulta es
+distinto al orden en que se escribe: primero \texttt{FROM} (con sus
+\texttt{JOIN}s), luego \texttt{WHERE}, después \texttt{GROUP BY}, luego
+\texttt{HAVING}, después la lista del \texttt{SELECT} y finalmente
+\texttt{ORDER BY}. Tener este modelo mental en la cabeza explica, por ejemplo,
+por qué un alias definido en el \texttt{SELECT} no siempre puede usarse
+en el \texttt{WHERE}.
+
+\textbf{\texttt{DISTINCT} y \texttt{ALL}.} \texttt{DISTINCT} elimina filas
+repetidas del resultado. \texttt{ALL} (valor por defecto) las conserva. La
+diferencia es relevante cuando proyectamos sólo unas pocas columnas y muchas
+combinaciones se repiten.
+
+\textbf{Alias.} Tanto las tablas como las columnas pueden recibir alias con
+\texttt{AS}. Es habitual abreviar las tablas (\texttt{cliente c},
+\texttt{factura f}) para escribir condiciones de \emph{join} más cortas.
+
+% -----------------------------------------------------
+\subsection{Cláusula \texttt{WHERE}: filtros sobre filas}
+% -----------------------------------------------------
+
+\texttt{WHERE} se usa para quedarse sólo con las filas que cumplan una
+condición lógica. Una condición es una \emph{expresión}: compara columnas
+contra valores o contra otras columnas y combina sub-expresiones con
+operadores lógicos.
+
+\paragraph{Operadores lógicos.}
+\texttt{AND}, \texttt{OR}, \texttt{NOT} y \texttt{XOR}. Como en cualquier
+lenguaje, \texttt{AND} tiene mayor precedencia que \texttt{OR}, así que
+conviene siempre parentizar para evitar ambigüedades.
+
+\paragraph{Operadores de comparación.}
+
+\begin{itemize}
+    \item Comparadores: \texttt{=}, \texttt{<>}, \texttt{<}, \texttt{>},
+    \texttt{<=}, \texttt{>=}.
+    \item \texttt{BETWEEN a AND b}: pertenece al intervalo cerrado $[a,b]$;
+    aplica a tipos numéricos, fechas y cadenas.
+    \item \texttt{LIKE 'patrón'}: comparación por patrón. \texttt{\%}
+    representa cualquier secuencia de caracteres y \texttt{\_} un único
+    carácter.
+    \item \texttt{IN (subconsulta o lista)}: verdadero si el valor está dentro
+    del conjunto. Muy usado para conectar consultas anidadas.
+    \item \texttt{EXISTS (subconsulta)}: verdadero si la subconsulta devuelve
+    al menos una fila. Particularmente útil para subconsultas correlacionadas.
+    \item \texttt{IS NULL} / \texttt{IS NOT NULL}: el único modo correcto de
+    comparar contra \texttt{NULL}, ya que \texttt{= NULL} \emph{nunca} es
+    verdadero (la comparación da \texttt{UNKNOWN}).
+\end{itemize}
+
+\paragraph{Ejemplos sobre el esquema del teórico.}
+
+\begin{lstlisting}
+-- Artículos cuya descripción empieza con A.
+SELECT * FROM articulos WHERE descr LIKE 'A%';
+
+-- Empieza con A y termina con K.
+SELECT * FROM articulos WHERE descr LIKE 'A%' AND descr LIKE '%K';
+
+-- Artículos provistos por algun proveedor (subconsulta con IN).
+SELECT * FROM articulos
+ WHERE Nart IN (SELECT Nart FROM provee);
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Cláusula \texttt{ORDER BY}: ordenamiento}
+% -----------------------------------------------------
+
+\texttt{ORDER BY} ordena el resultado de la consulta por una o más columnas.
+Sin esta cláusula, el orden devuelto por el motor no está garantizado, aunque
+suele coincidir con el primer índice utilizado.
+
+\begin{lstlisting}
+ORDER BY expresion_orden1 [ASC|DESC]
+       [, expresion_orden2 [ASC|DESC]] [, ...];
+\end{lstlisting}
+
+La expresión puede ser un nombre de columna, una expresión cualquiera o el
+\emph{número de posición} de la columna en el \texttt{SELECT}. \texttt{ASC}
+es ascendente (por defecto) y \texttt{DESC} descendente. Si se ordena por
+varias columnas, la segunda actúa como criterio de desempate dentro de la
+primera, y así sucesivamente.
+
+\paragraph{Ejemplo.}
+
+\begin{lstlisting}
+-- Listado de articulo - proveedor - precio, ordenado por Nart ascendente.
+SELECT DISTINCT Nart AS numero_art,
+                pv.Nprov AS numero_prov,
+                nombre,
+                precio_venta
+  FROM Proveedores pd, Provee pv
+ WHERE pd.Nprov = pv.Nprov
+ ORDER BY Nart;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Funciones de agregación}
+% -----------------------------------------------------
+
+Las \emph{funciones agregadas} reciben una expresión de columna y devuelven
+un único valor calculado sobre todas las filas. Las del estándar son:
+
+\begin{center}
+\begin{tabular}{@{}l p{10cm}@{}}
+\toprule
+\textbf{Función} & \textbf{Devuelve} \\
+\midrule
+\texttt{AVG(expr)}   & Promedio de los valores no nulos. \\
+\texttt{COUNT(expr)} & Cantidad de valores no nulos. \texttt{COUNT(*)}
+                       cuenta filas, incluyendo aquéllas con \texttt{NULL}. \\
+\texttt{SUM(expr)}   & Suma de los valores no nulos. \\
+\texttt{MIN(expr)}   & Mínimo (compatible con números, fechas y cadenas). \\
+\texttt{MAX(expr)}   & Máximo. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{nota}
+Salvo \texttt{COUNT(*)}, las funciones agregadas \textbf{ignoran los valores
+\texttt{NULL}}. Esto es importante a la hora de calcular promedios: el
+denominador es la cantidad de valores presentes, no la cantidad de filas.
+\end{nota}
+
+\paragraph{Ejemplo simple.}
+
+\begin{lstlisting}
+SELECT AVG(precio) AS promedio FROM articulos;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{\texttt{GROUP BY}: consultas sumarias}
+% -----------------------------------------------------
+
+\texttt{GROUP BY} convierte un \texttt{SELECT} en una \emph{consulta sumaria}:
+en lugar de devolver una fila por cada fila de la base, agrupa todas las que
+comparten el valor de las columnas indicadas y produce una fila por grupo.
+Las columnas que aparecen en el \texttt{SELECT} y no están dentro de una
+función de agregación deben aparecer también en el \texttt{GROUP BY}.
+
+\paragraph{Ejemplo.}
+
+\begin{lstlisting}
+-- Para cada articulo, precio promedio entre todos sus proveedores.
+SELECT Nart, AVG(precio_venta) AS promedio_p_v
+  FROM Provee
+ GROUP BY Nart;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{\texttt{HAVING}: filtros sobre grupos}
+% -----------------------------------------------------
+
+\texttt{HAVING} es a los grupos lo que \texttt{WHERE} es a las filas: filtra
+los grupos producidos por \texttt{GROUP BY} usando condiciones que pueden
+involucrar funciones agregadas. La regla práctica es:
+
+\begin{itemize}
+    \item Si la condición sólo usa \emph{atributos planos} (no agregados),
+    debe ir en \texttt{WHERE} (más eficiente: filtra antes de agrupar).
+    \item Si la condición involucra \emph{funciones agregadas}, debe ir
+    en \texttt{HAVING} (sólo se puede evaluar después de armar los grupos).
+\end{itemize}
+
+\paragraph{Ejemplo.}
+
+\begin{lstlisting}
+-- Articulos cuyo precio promedio de venta entre proveedores es < 1000.
+SELECT Nart, AVG(precio_venta)
+  FROM Provee
+ GROUP BY Nart
+HAVING AVG(precio_venta) < 1000;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Subconsultas}
+% -----------------------------------------------------
+
+Una \emph{subconsulta} es un \texttt{SELECT} usado dentro de otra sentencia.
+Pueden aparecer en distintos lugares y con distintas semánticas:
+
+\begin{itemize}
+    \item En el \texttt{WHERE} junto con \texttt{IN}, \texttt{NOT IN},
+    \texttt{EXISTS}, \texttt{NOT EXISTS} u operadores de comparación
+    (\texttt{=}, \texttt{<}, \texttt{ANY}, \texttt{ALL}).
+    \item En el \texttt{FROM} como \emph{tabla derivada}, dándole un alias
+    para tratarla como una relación más.
+    \item En el \texttt{SELECT} como subconsulta escalar, devolviendo un
+    único valor por fila.
+\end{itemize}
+
+\textbf{Subconsultas correlacionadas.} Son aquellas en las que la subconsulta
+hace referencia a una columna de la consulta exterior. Se ejecutan
+conceptualmente una vez por cada fila externa. Aparecen típicamente en
+patrones del tipo ``existe alguien con \dots'' o ``no existe ninguno
+con \dots''.
+
+\paragraph{Ejemplo de \texttt{NOT EXISTS}.}
+
+\begin{lstlisting}
+-- Clientes que no tienen ninguna factura asociada.
+SELECT *
+  FROM cliente c
+ WHERE NOT EXISTS (SELECT 1
+                     FROM factura f
+                    WHERE f.nro_cliente = c.nro_cliente)
+ ORDER BY c.apellido DESC, c.nombre DESC;
+\end{lstlisting}
+
+Esta consulta es exactamente la del Ejercicio 3.a del práctico.
+
+% -----------------------------------------------------
+\subsection{Reuniones (\texttt{JOIN})}
+% -----------------------------------------------------
+
+Los \texttt{JOIN} se escriben dentro del \texttt{FROM} y se corresponden con
+las operaciones de reunión del álgebra relacional vista en Bases de Datos I.
+Su sintaxis general es:
+
+\begin{lstlisting}
+tabla1 [NATURAL] { {LEFT|RIGHT|FULL} OUTER | INNER } JOIN tabla2
+       [ON condicionJoin] [USING (columna1 [, columna2, ...])]
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{INNER JOIN}: devuelve sólo las filas que matchean en ambas
+    tablas. Es lo que hace, implícitamente, el viejo estilo
+    \texttt{FROM a, b WHERE a.k = b.k}.
+    \item \texttt{LEFT OUTER JOIN}: conserva todas las filas de la tabla
+    izquierda, completando con \texttt{NULL} cuando no hay coincidencia
+    a la derecha. Útil para detectar ``filas huérfanas''.
+    \item \texttt{RIGHT OUTER JOIN}: simétrico, conserva todas las de la
+    derecha.
+    \item \texttt{FULL OUTER JOIN}: conserva todas las filas de ambas
+    (no soportado en MySQL nativamente, pero sí en PostgreSQL y Oracle).
+    \item \texttt{NATURAL JOIN}: une por todas las columnas con el mismo
+    nombre. Cómodo, pero peligroso, porque depende del nombrado.
+    \item \texttt{USING (col)}: como el natural pero limitado a las columnas
+    explícitas.
+\end{itemize}
+
+\paragraph{Ejemplo equivalente.}
+
+\begin{lstlisting}
+-- Estilo "moderno" con INNER JOIN.
+SELECT p.Nart, pv.Nprov, p.nombre, pv.precio_venta
+  FROM proveedores p
+  INNER JOIN provee pv ON pv.Nprov = p.Nprov;
+
+-- Estilo "tradicional" con coma y WHERE (equivalente).
+SELECT p.Nart, pv.Nprov, p.nombre, pv.precio_venta
+  FROM proveedores p, provee pv
+ WHERE pv.Nprov = p.Nprov;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Operaciones sobre conjuntos}
+% -----------------------------------------------------
+
+SQL permite combinar resultados de varios \texttt{SELECT} con operadores de
+conjuntos, siempre y cuando ambas consultas devuelvan la misma cantidad de
+columnas y de tipos compatibles:
+
+\begin{itemize}
+    \item \texttt{UNION}: unión, eliminando duplicados.
+    \item \texttt{UNION ALL}: unión sin eliminar duplicados (más eficiente).
+    \item \texttt{INTERSECT}: intersección.
+    \item \texttt{EXCEPT} (o \texttt{MINUS} en Oracle): diferencia.
+\end{itemize}
+
+% -----------------------------------------------------
+\subsection{\texttt{INSERT}}
+% -----------------------------------------------------
+
+\texttt{INSERT} agrega filas a una tabla. Tiene dos formas habituales:
+
+\begin{lstlisting}
+-- (a) Insertar un registro especificando valores.
+INSERT INTO destino (campo1 [, campo2, ...])
+VALUES (valor1 [, valor2, ...]);
+
+-- (b) Insertar resultados de una consulta.
+INSERT INTO destino (campo1 [, campo2, ...]) seleccion;
+\end{lstlisting}
+
+Si no se nombran las columnas, se asume que se está cargando \emph{toda} la
+tabla en el orden de definición. Las cadenas se delimitan con comillas
+simples y las fechas suelen escribirse en formato \texttt{'YYYY-MM-DD'}.
+
+\paragraph{Ejemplo.}
+
+\begin{lstlisting}
+INSERT INTO articulos (Nart, descripcion, precio, stock_max, stock_min)
+VALUES (5, 'Vino x1L', 2500, 90, 20);
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{\texttt{UPDATE}}
+% -----------------------------------------------------
+
+\texttt{UPDATE} cambia valores de filas existentes. Su sintaxis es:
+
+\begin{lstlisting}
+UPDATE tabla
+   SET campo1 = valor1 [, campo2 = valor2, ...]
+ [WHERE condicion];
+\end{lstlisting}
+
+\textbf{Cuidado:} si se omite el \texttt{WHERE}, la modificación se aplica a
+todas las filas de la tabla.
+
+\paragraph{Ejemplo.}
+
+\begin{lstlisting}
+-- Aumenta un 20% solo a los articulos baratos.
+UPDATE articulos
+   SET precio = precio * 1.2
+ WHERE precio < 2000;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{\texttt{DELETE}}
+% -----------------------------------------------------
+
+\texttt{DELETE} elimina filas de una tabla:
+
+\begin{lstlisting}
+DELETE FROM tabla [WHERE condicion];
+\end{lstlisting}
+
+Sin \texttt{WHERE} elimina \emph{todas} las filas (la tabla queda vacía pero
+sigue existiendo, a diferencia de \texttt{DROP TABLE}). Si la fila a borrar
+está referenciada por una clave foránea, el resultado depende de la acción
+declarada (\texttt{CASCADE}, \texttt{RESTRICT}, \texttt{SET NULL},
+\texttt{SET DEFAULT}, \texttt{NO ACTION}); ver Sección~\ref{sec:fk}.
+
+% =====================================================
+\section{DDL: definición del esquema}
+% =====================================================
+
+% -----------------------------------------------------
+\subsection{Tipos de datos}
+% -----------------------------------------------------
+
+El estándar SQL clasifica los tipos en 13 categorías primarias. Cada motor
+puede agregar variantes y sinónimos. Los tipos del estándar SQL-89 son
+\texttt{INTEGER}, \texttt{SMALLINT}, \texttt{CHARACTER}, \texttt{DECIMAL},
+\texttt{NUMERIC}, \texttt{REAL}, \texttt{FLOAT} y \texttt{DOUBLE PRECISION};
+SQL-92 agrega \texttt{CHARACTER VARYING} (\texttt{VARCHAR}), \texttt{DATE},
+\texttt{TIME}, \texttt{BIT}, \texttt{TIMESTAMP}, \texttt{INTERVAL} y
+\texttt{BIT VARYING}; SQL:1999 incorpora características objeto-relacionales.
+
+\paragraph{Tipos numéricos (MySQL).}
+
+\begin{center}
+\begin{tabular}{@{}l p{8.5cm}@{}}
+\toprule
+\textbf{Tipo} & \textbf{Descripción} \\
+\midrule
+\texttt{TINYINT}    & Entero pequeño $-128..127$ (sin signo $0..255$). \\
+\texttt{SMALLINT}   & $-32768..32767$. \\
+\texttt{MEDIUMINT}  & $-8.388.608..8.388.607$. \\
+\texttt{INT}        & $-2.147.483.648..2.147.483.647$. \\
+\texttt{BIGINT}     & Hasta $\sim 9.2 \times 10^{18}$. \\
+\texttt{FLOAT}      & Coma flotante de precisión simple. \\
+\texttt{DOUBLE}     & Coma flotante de precisión doble. \\
+\texttt{DECIMAL(p,e)} & Decimal exacto con $p$ dígitos y $e$ decimales. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Tipos de fecha y cadena.}
+
+\begin{center}
+\begin{tabular}{@{}l p{8.5cm}@{}}
+\toprule
+\textbf{Tipo} & \textbf{Descripción} \\
+\midrule
+\texttt{DATE}      & Fecha (\texttt{YYYY-MM-DD}). \\
+\texttt{DATETIME}  & Fecha y hora. \\
+\texttt{TIMESTAMP} & Fecha y hora con rango acotado, vinculado a la zona
+                     horaria del servidor. \\
+\texttt{CHAR(n)}   & Cadena de longitud fija. \\
+\texttt{VARCHAR(n)}& Cadena de longitud variable hasta $n$. \\
+\texttt{TEXT/BLOB} & Textos o binarios extensos. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{nota}
+\textbf{Para el práctico.} Para precios y montos conviene
+\texttt{DECIMAL(p,e)} (evita errores de redondeo de \texttt{FLOAT}); para
+identificadores numéricos, \texttt{INT}; para fechas, \texttt{DATE}; para
+horarios de entrada/salida (Estacionamiento), \texttt{TIME}.
+\end{nota}
+
+% -----------------------------------------------------
+\subsection{\texttt{CREATE TABLE}}
+% -----------------------------------------------------
+
+\texttt{CREATE TABLE} es el comando central de DDL: define una nueva relación
+con sus columnas y sus restricciones. Su forma general es:
+
+\begin{lstlisting}
+CREATE TABLE tabla (
+   campo1 tipo [(tamano)] [NOT NULL] [restriccion_inline],
+   campo2 tipo [(tamano)] [NOT NULL] [restriccion_inline],
+   ...
+   [, ligaduraIntegridad1]
+   [, ligaduraIntegridad2]
+);
+\end{lstlisting}
+
+Cada campo declara su nombre, tipo y, opcionalmente, si admite \texttt{NULL}
+y restricciones a nivel de columna. Al final del bloque pueden agregarse
+restricciones de tabla (claves primarias compuestas, foráneas, \texttt{CHECK}s
+multi-columna, etc.).
+
+\paragraph{Ejemplo del teórico.}
+
+\begin{lstlisting}
+CREATE TABLE Proveedores (
+    Nprov INTEGER NOT NULL CONSTRAINT pkproveedores PRIMARY KEY,
+    Nombre VARCHAR(50) NOT NULL CONSTRAINT uniconombre UNIQUE,
+    Direccion VARCHAR(50)
+);
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Ligaduras de integridad}
+% -----------------------------------------------------
+\label{sec:fk}
+
+Las \emph{ligaduras de integridad} (también llamadas restricciones o
+\emph{constraints}) garantizan que los datos cumplan ciertas reglas. Las que
+maneja SQL para este práctico son:
+
+\begin{itemize}
+    \item \textbf{Claves primarias} (\texttt{PRIMARY KEY}): identifican de
+    manera única a cada fila. Implican \texttt{NOT NULL} y \texttt{UNIQUE}.
+    Una tabla tiene a lo sumo una. Pueden ser simples o \emph{compuestas}.
+    \item \textbf{Claves secundarias o candidatas} (\texttt{UNIQUE}):
+    aseguran unicidad sobre una o varias columnas, pero permiten
+    \texttt{NULL}.
+    \item \textbf{No nulidad} (\texttt{NOT NULL}): el campo no admite
+    \texttt{NULL}.
+    \item \textbf{Restricciones de dominio} (\texttt{CHECK (condicion)}):
+    expresan reglas declarativas sobre los valores que un campo puede tomar
+    (rangos, predicados, etc.).
+    \item \textbf{Integridad referencial} (\texttt{FOREIGN KEY \dots\
+    REFERENCES \dots}): obliga a que el valor de una columna exista en otra
+    tabla, o sea \texttt{NULL}.
+    \item \textbf{Aserciones} (\texttt{ASSERTION}) y \textbf{disparadores}
+    (\texttt{TRIGGER}): mecanismos más generales (no se usan en este
+    práctico, pero se mencionan en el teórico).
+\end{itemize}
+
+La sintaxis general de la cláusula \texttt{CONSTRAINT} es:
+
+\begin{lstlisting}
+-- Indices de un solo campo:
+CONSTRAINT nombre {PRIMARY KEY | UNIQUE | NOT NULL
+                 | REFERENCES tablaexterna [(campoexterno)]}
+
+-- Indices multi-campo:
+CONSTRAINT nombre {
+    PRIMARY KEY (col1 [, col2, ...])
+  | UNIQUE       (col1 [, col2, ...])
+  | NOT NULL     (col1 [, col2, ...])
+  | CHECK (condicion)
+  | FOREIGN KEY (ref1 [, ref2, ...])
+        REFERENCES tablaexterna [(extcol1 [, extcol2, ...])]
+        [ON DELETE accion] [ON UPDATE accion]
+}
+\end{lstlisting}
+
+\paragraph{Acciones referenciales.}
+Cuando se borra o actualiza una fila a la que apunta una clave foránea, la
+acción a tomar puede ser:
+
+\begin{center}
+\begin{tabular}{@{}l p{10.5cm}@{}}
+\toprule
+\textbf{Acción} & \textbf{Comportamiento} \\
+\midrule
+\texttt{CASCADE}     & Propaga el borrado/actualización a las filas
+                       referenciantes. \\
+\texttt{RESTRICT}    & Aborta la operación si existen referencias
+                       (lo mismo que \texttt{NO ACTION} en muchos motores). \\
+\texttt{SET NULL}    & Pone \texttt{NULL} en la columna referenciante. \\
+\texttt{SET DEFAULT} & Pone el valor por defecto. \\
+\texttt{NO ACTION}   & Variante de \texttt{RESTRICT}, normalmente diferida
+                       al final de la transacción. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Ejemplos prácticos.}
+
+\begin{lstlisting}
+-- Articulo con CHECKs sobre stock y precio.
+CREATE TABLE articulos (
+    Nart INTEGER NOT NULL PRIMARY KEY,
+    Descr VARCHAR(100),
+    Precio FLOAT,
+    Cant INTEGER,
+    Stock_min INTEGER,
+    Stock_max INTEGER,
+    CONSTRAINT control_min_max CHECK (stock_min < stock_max),
+    CONSTRAINT precio_positivo CHECK (precio > 0)
+);
+
+-- Provee con clave primaria compuesta y dos claves foraneas.
+CREATE TABLE provee (
+    Nprov INTEGER NOT NULL,
+    Nart INTEGER NOT NULL,
+    Precio_venta FLOAT,
+    CONSTRAINT pkprovee PRIMARY KEY (Nart, Nprov),
+    CONSTRAINT fkproveedores FOREIGN KEY (Nprov) REFERENCES proveedores,
+    CONSTRAINT fkarticulos   FOREIGN KEY (Nart)
+        REFERENCES articulos ON DELETE CASCADE
+);
+\end{lstlisting}
+
+\begin{nota}
+\textbf{Cómo elegir la acción referencial.} En el inciso 1.a del práctico,
+borrar un \emph{cliente} debe arrastrar sus facturas $\Rightarrow$
+\texttt{ON DELETE CASCADE}. Pero borrar un \emph{producto} que ya fue
+facturado debe ser rechazado $\Rightarrow$ \texttt{ON DELETE RESTRICT}.
+La consigna fija el comportamiento esperado y eso determina la acción.
+\end{nota}
+
+% -----------------------------------------------------
+\subsection{Dominios (\texttt{CREATE DOMAIN})}
+% -----------------------------------------------------
+
+Un \emph{dominio} es un tipo definido por el usuario sobre un tipo existente,
+opcionalmente con valor por defecto, no nulidad y \texttt{CHECK} asociado:
+
+\begin{lstlisting}
+CREATE DOMAIN nombreDominio [AS] tipoDatos
+    [DEFAULT valorPorDefecto]
+    [NOT NULL]
+    [CHECK (condicion)];
+\end{lstlisting}
+
+\paragraph{Ejemplo del teórico.}
+
+\begin{lstlisting}
+CREATE DOMAIN enteroPositivo AS INTEGER
+    DEFAULT 2
+    CHECK (VALUE > 1)
+    NOT NULL;
+\end{lstlisting}
+
+\begin{nota}
+\textbf{Soporte por motor.} \texttt{CREATE DOMAIN} es nativo en
+\textbf{PostgreSQL}, pero \textbf{MySQL} y \textbf{Oracle} no lo
+implementan tal cual el estándar. La cátedra lo emula con la combinación
+\emph{tipo de dato + \texttt{CHECK}} (en MySQL también \texttt{ENUM} para
+conjuntos cerrados como \texttt{\{gris, negro, azul\}} en el inciso 1.b).
+\end{nota}
+
+% -----------------------------------------------------
+\subsection{\texttt{ALTER TABLE}}
+% -----------------------------------------------------
+
+Permite modificar la estructura de una tabla ya creada:
+
+\begin{lstlisting}
+ALTER TABLE tabla {
+    ADD {COLUMN campo tipo [(tamano)] [NOT NULL]
+       | clausulaConstraint}
+  | DROP {COLUMN campo | CONSTRAINT clausulaEliminar}
+};
+\end{lstlisting}
+
+\paragraph{Ejemplos.}
+
+\begin{lstlisting}
+ALTER TABLE Proveedores ADD Telefono VARCHAR(20) NOT NULL;
+ALTER TABLE Proveedores DROP Direccion;
+ALTER TABLE Proveedores ADD CONSTRAINT telefonounico UNIQUE (Telefono);
+ALTER TABLE Proveedores DROP CONSTRAINT telefonounico;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Índices}
+% -----------------------------------------------------
+
+Un \emph{índice} es una estructura auxiliar (típicamente B-tree o hash)
+basada en una o más columnas, cuya función es acelerar el acceso a los
+datos. Los motores lo mantienen automáticamente conforme se insertan,
+modifican o borran filas.
+
+\begin{lstlisting}
+CREATE [UNIQUE] INDEX indice ON tabla
+    (campo1 [ASC|DESC] [, campo2 [ASC|DESC], ...])
+    [WITH {PRIMARY | DISALLOW NULL | IGNORE NULL}];
+\end{lstlisting}
+
+\textbf{Ideas principales.}
+\begin{itemize}
+    \item \texttt{UNIQUE INDEX}: además de acelerar, impide duplicados.
+    \item \texttt{PRIMARY KEY} y \texttt{UNIQUE} crean índices implícitamente.
+    \item Cada \texttt{INSERT}/\texttt{UPDATE}/\texttt{DELETE} cuesta más con
+    cada índice; los índices aceleran consultas pero penalizan modificaciones.
+\end{itemize}
+
+% -----------------------------------------------------
+\subsection{Vistas (\texttt{CREATE VIEW})}
+% -----------------------------------------------------
+
+Una \emph{vista} es una relación virtual, definida como una consulta
+nominada. No forma parte del modelo lógico, pero se ve y se usa como una
+tabla más:
+
+\begin{lstlisting}
+CREATE VIEW <nombre_vista> AS <expresion_de_consulta>;
+
+-- Ejemplo.
+CREATE VIEW nombre_proveedores AS
+    SELECT nombre FROM proveedores;
+\end{lstlisting}
+
+Sus usos clásicos son: ocultar columnas sensibles (seguridad), simplificar
+consultas frecuentes y desacoplar el esquema lógico de las aplicaciones que
+lo consultan. Su \emph{actualización} (\texttt{UPDATE} sobre una vista) es
+problemática y depende de cuán mapeable sea la vista a una sola tabla base.
+
+% -----------------------------------------------------
+\subsection{Borrado de estructuras: \texttt{DROP}}
+% -----------------------------------------------------
+
+\texttt{DROP} elimina objetos definitivamente. Su sintaxis básica es:
+
+\begin{lstlisting}
+DROP {TABLE tabla | INDEX indice ON tabla};
+\end{lstlisting}
+
+A diferencia de \texttt{DELETE}, que vacía una tabla pero la conserva,
+\texttt{DROP TABLE} la elimina completamente, incluyendo su definición.
+
+% =====================================================
+\section{Conexión con los ejercicios del práctico}
+% =====================================================
+
+Los tres ejercicios del práctico recorren los temas anteriores en el orden
+natural: primero el esquema (DDL), después los datos (\texttt{INSERT}) y
+finalmente las consultas (\texttt{SELECT} con todas sus cláusulas).
+
+\subsection*{Ejercicio 1 --- Definición de esquemas}
+
+Tres bases de datos independientes (\texttt{practico1a}, \texttt{practico1b},
+\texttt{practico1c}) que ejercitan distintos rincones de DDL:
+
+\begin{itemize}
+    \item \textbf{Inciso a} (MySQL y PostgreSQL). Cliente-Producto-Factura-
+    \mbox{ItemFactura}. Foco: \texttt{PRIMARY KEY} simple y compuesta,
+    \texttt{CHECK} (\texttt{precio > 0}, \texttt{stock\_minimo <=
+    stock\_maximo}) y \texttt{FOREIGN KEY} con acciones distintas
+    (\texttt{ON DELETE CASCADE} para facturas de un cliente borrado,
+    \texttt{ON DELETE RESTRICT} para productos ya facturados).
+    \item \textbf{Inciso b} (MySQL y Oracle). Vehículo-Persona-Dueño-
+    Estacionamiento-Parquímetro. Foco: \texttt{CREATE DOMAIN}
+    (\emph{nombreYApellido} como \texttt{VARCHAR(45)}), restricción de
+    conjunto cerrado (\emph{color} en \{gris, negro, azul\} con
+    \texttt{ENUM} en MySQL o \texttt{CHECK} en Oracle), \texttt{CHECK} de
+    rango (\texttt{altura BETWEEN 0 AND 5000}), autoincrementales
+    (\texttt{AUTO\_INCREMENT} en MySQL, \texttt{SEQUENCE + TRIGGER} o
+    \texttt{IDENTITY} en Oracle) y \texttt{ON DELETE RESTRICT} para vehículos
+    estacionados.
+    \item \textbf{Inciso c} (PostgreSQL y Oracle). Cliente-Automóvil-
+    Categoría-Taller-Accidente. Foco: dominio de marcas restringido
+    (\{FIAT, RENAULT, FORD\}), rango sobre el modelo (1990–2015), control
+    sobre la tarifa (positiva y menor a 10000) y \texttt{ON DELETE CASCADE}
+    para los accidentes ante el borrado de un cliente.
+\end{itemize}
+
+\subsection*{Ejercicio 2 --- Carga de datos coherentes}
+
+Para cada una de las tres bases, se insertan datos consistentes que respeten
+las claves primarias, las foráneas y los \texttt{CHECK}. ``Coherente'' aquí
+implica además que los datos alcancen para que las consultas del
+Ejercicio 3 produzcan resultados no triviales: si pediremos clientes sin
+facturas, debe existir alguno; si pediremos clientes con más de tres
+accidentes, también.
+
+\subsection*{Ejercicio 3 --- Consultas}
+
+Cada inciso ejercita un patrón distinto de \texttt{SELECT}:
+
+\begin{itemize}
+    \item \textbf{a)} ``Clientes sin facturas'' es un caso típico de
+    \emph{antijoin}: se resuelve con \texttt{NOT EXISTS} o \texttt{NOT IN}
+    (o \texttt{LEFT JOIN \dots\ WHERE \dots\ IS NULL}). Se cierra con un
+    \texttt{ORDER BY apellido DESC, nombre DESC}.
+    \item \textbf{b)} ``Vehículos que usaron el parquímetro 9'' requiere un
+    \texttt{JOIN} entre \emph{vehiculo} y \emph{estacionamiento} más un
+    filtro sobre \texttt{nro\_parquimetro = 9}. Se devuelven sólo
+    \emph{modelo} y \emph{color}, casi siempre con \texttt{DISTINCT}
+    para evitar repeticiones por cada estacionamiento.
+    \item \textbf{c)} ``Clientes con más de 3 accidentes'' es el caso clásico
+    de \texttt{GROUP BY} + \texttt{HAVING}: se agrupa por DNI, se cuenta y
+    se filtra con \texttt{HAVING COUNT(*) > 3}.
+    \item \textbf{d)} ``Máximo y mínimo monto de factura por cliente'' usa
+    \texttt{MAX}, \texttt{MIN} y \texttt{GROUP BY nro\_cliente}, junto con un
+    \texttt{JOIN} hacia \emph{cliente} para mostrar el nombre.
+    \item \textbf{e)} Tres consultas en álgebra relacional, donde aparezcan
+    todos los operadores: \emph{selección} ($\sigma$), \emph{proyección}
+    ($\pi$), \emph{unión} ($\cup$), \emph{intersección} ($\cap$) y
+    \emph{producto cartesiano} ($\times$). Es el puente con la materia
+    Bases de Datos I.
+\end{itemize}
+
+\paragraph{Ejemplo resuelto (3.c).}
+
+\begin{lstlisting}
+SELECT c.dni, c.nombre, c.apellido
+  FROM cliente c
+  JOIN accidente a ON a.dni = c.dni
+ GROUP BY c.dni, c.nombre, c.apellido
+HAVING COUNT(*) > 3;
+\end{lstlisting}
+
+\paragraph{Ejemplo resuelto (3.d).}
+
+\begin{lstlisting}
+SELECT c.nro_cliente,
+       c.nombre,
+       MAX(f.monto) AS monto_max,
+       MIN(f.monto) AS monto_min
+  FROM cliente c
+  JOIN factura f ON f.nro_cliente = c.nro_cliente
+ GROUP BY c.nro_cliente, c.nombre;
+\end{lstlisting}
+
+% =====================================================
+\section{Diferencias entre motores: lo que no hay que olvidar}
+% =====================================================
+
+\begin{center}
+\begin{tabular}{@{}p{3.4cm} p{3.6cm} p{3.6cm} p{3.6cm}@{}}
+\toprule
+\textbf{Tema} & \textbf{MySQL 8+} & \textbf{PostgreSQL 14+} &
+\textbf{Oracle 10/11 XE} \\
+\midrule
+``Crear la base'' & \texttt{CREATE DATABASE} &
+\texttt{CREATE DATABASE} (cada una corre independiente) &
+Se crea un \emph{usuario/esquema}: \texttt{CREATE USER \dots} y se
+trabaja sobre él. \\
+\addlinespace
+Auto incremento & \texttt{AUTO\_INCREMENT} en columna &
+\texttt{SERIAL} / \texttt{GENERATED \dots\ AS IDENTITY} &
+\texttt{SEQUENCE} + \texttt{TRIGGER} (10/11) o \texttt{IDENTITY} (12+). \\
+\addlinespace
+Dominios & No soporta \texttt{CREATE DOMAIN}; emular con
+\texttt{CHECK} o \texttt{ENUM} & Soporta \texttt{CREATE DOMAIN} estándar &
+No soporta \texttt{CREATE DOMAIN}; emular con \texttt{CHECK}. \\
+\addlinespace
+Conjuntos cerrados & \texttt{ENUM('a','b','c')} &
+\texttt{CHECK (col IN ('a','b','c'))} o \texttt{CREATE TYPE \dots\ AS ENUM} &
+\texttt{CHECK (col IN ('a','b','c'))}. \\
+\addlinespace
+Booleano & \texttt{BOOLEAN} (sinónimo de \texttt{TINYINT(1)}) &
+\texttt{BOOLEAN} real & No tiene; emular con \texttt{NUMBER(1)} y
+\texttt{CHECK}. \\
+\addlinespace
+Texto largo & \texttt{TEXT}, \texttt{LONGTEXT} & \texttt{TEXT} &
+\texttt{CLOB}. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================
+\section{Ideas clave para repasar antes del parcial}
+% =====================================================
+
+\begin{enumerate}
+    \item \textbf{SQL se divide en DML, DDL y DCL.} Saber rápidamente a qué
+    grupo pertenece cada sentencia ahorra confusiones.
+    \item \textbf{La sentencia \texttt{SELECT} tiene seis cláusulas} y un
+    \emph{orden lógico} de evaluación distinto al orden de escritura.
+    \texttt{FROM} $\to$ \texttt{WHERE} $\to$ \texttt{GROUP BY} $\to$
+    \texttt{HAVING} $\to$ \texttt{SELECT} $\to$ \texttt{ORDER BY}.
+    \item \textbf{\texttt{WHERE} filtra filas; \texttt{HAVING} filtra grupos.}
+    Si no hay agregadas, no hace falta \texttt{HAVING}.
+    \item \textbf{Las funciones de agregación ignoran \texttt{NULL}}, salvo
+    \texttt{COUNT(*)}.
+    \item \textbf{\texttt{NULL} se compara con \texttt{IS NULL} / \texttt{IS
+    NOT NULL}}, nunca con \texttt{=}.
+    \item \textbf{\texttt{LIKE} usa \texttt{\%} y \texttt{\_}} como
+    comodines para patrones de cadenas.
+    \item \textbf{\texttt{JOIN} es la versión moderna del producto cartesiano
+    + \texttt{WHERE}}, y los \texttt{OUTER JOIN} son la forma natural de
+    encontrar ``filas sin pareja''.
+    \item \textbf{Una clave primaria es \texttt{NOT NULL} + \texttt{UNIQUE}}.
+    Las claves candidatas se modelan con \texttt{UNIQUE}; las foráneas con
+    \texttt{REFERENCES}.
+    \item \textbf{Las acciones referenciales} (\texttt{CASCADE},
+    \texttt{RESTRICT}, \texttt{SET NULL}, \texttt{SET DEFAULT},
+    \texttt{NO ACTION}) son las que bajan los requisitos del enunciado al
+    SQL.
+    \item \textbf{\texttt{CREATE DOMAIN} es estándar y de PostgreSQL}; en
+    MySQL y Oracle se emula con \texttt{CHECK} o \texttt{ENUM}. Ese punto
+    es el que diferencia los tres incisos del Ejercicio 1.
+    \item \textbf{\texttt{INSERT}, \texttt{UPDATE}, \texttt{DELETE} sin
+    \texttt{WHERE}} actúan sobre toda la tabla. Es uno de los errores más
+    comunes y costosos.
+    \item \textbf{\texttt{DROP TABLE} elimina la tabla completa};
+    \texttt{DELETE FROM tabla} sólo borra las filas.
+    \item \textbf{Patrones típicos de consulta del práctico}:
+    \begin{itemize}
+        \item ``A sin B'' $\Rightarrow$ \texttt{NOT EXISTS} o \texttt{LEFT
+        JOIN \dots\ WHERE \dots\ IS NULL}.
+        \item ``Cuántos B por A'' $\Rightarrow$ \texttt{GROUP BY a} con
+        \texttt{COUNT(*)}.
+        \item ``A con más de $k$ B'' $\Rightarrow$ \texttt{GROUP BY a
+        HAVING COUNT(*) > $k$}.
+        \item ``Máx/mín por A'' $\Rightarrow$ \texttt{GROUP BY a} con
+        \texttt{MAX/MIN}.
+    \end{itemize}
+    \item \textbf{Cada motor tiene sus modismos.} La diferencia más
+    importante a la hora de codificar es la creación del esquema/base, los
+    autoincrementales y el manejo de dominios y enums.
+\end{enumerate}
+
+% =====================================================
+\section*{Resumen final}
+% =====================================================
+\addcontentsline{toc}{section}{Resumen final}
+
+El Práctico 1 es un repaso integral que reúne casi todos los pilares de SQL:
+DDL para definir tablas con claves, restricciones de dominio y de integridad
+referencial; DML para poblarlas y consultarlas; \texttt{JOIN}s, agrupamientos
+y funciones agregadas para consultas no triviales; y una práctica concreta de
+las diferencias entre motores. Si entran sólidas las cinco ideas de
+``\texttt{SELECT} con sus seis cláusulas'', ``orden lógico de evaluación'',
+``\texttt{WHERE} vs \texttt{HAVING}'', ``acciones referenciales'' y
+``dominios estándar vs emulados'', queda muy buena base para encarar
+el resto de la materia y, en particular, el Práctico 2 (DCL, permisos y
+roles), que se construye exactamente sobre estos esquemas.
+
+\end{document}

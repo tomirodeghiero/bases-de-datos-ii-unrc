@@ -1,0 +1,823 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas y diagramas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Resumen Teórico --- APIs / JDBC}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+
+\lstdefinestyle{javastyle}{
+    language=Java,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+\lstset{style=javastyle}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+\title{Resumen Teórico --- APIs para Acceso a Bases de Datos\\[4pt]
+       \large Bases de Datos II --- Práctico N.\textsuperscript{o} 4}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Resumen Teórico}}\\[6pt]
+    {\large APIs para Acceso a Bases de Datos --- JDBC\\[2pt]
+    Práctico N.\textsuperscript{o} 4}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Material elaborado a partir del teórico
+    \emph{Teorico\_5\_APIs\_Accesos\_Base\_de\_Datos}.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introducción}
+% =====================================================
+
+Hasta este punto del cuatrimestre, todo lo que ejecutábamos sobre la
+base de datos lo hacíamos con un cliente como \texttt{psql},
+\texttt{mysql} o \texttt{sqlplus}: un humano escribiendo SQL.
+El Práctico 4 cambia el ángulo: \emph{programación cliente} de la
+base. Las aplicaciones reales no las escribe un humano comando a
+comando: las escribe un programa, casi siempre en un lenguaje de
+propósito general (Java, Python, C\#, etc.) usando una \textbf{API de
+acceso a la base}.
+
+El teórico se centra en la API de Java, \textbf{JDBC} (\emph{Java
+DataBase Connectivity}), porque es la que se usa en el práctico, pero
+las ideas son generales: hace falta un \emph{driver} específico del
+motor, una \emph{conexión}, un objeto que represente la
+\emph{sentencia} y una manera de \emph{recorrer los resultados}.
+
+% =====================================================
+\section{Arquitecturas de aplicaciones con acceso a base}
+% =====================================================
+
+Hay dos arquitecturas básicas:
+
+\begin{description}[leftmargin=2.4cm,style=nextline]
+    \item[\textbf{Dos capas}] La aplicación cliente se conecta
+    \emph{directamente} al servidor de base de datos. Es lo más
+    simple y lo que se usa en los ejercicios del práctico: una
+    aplicación de consola Java con JDBC contra MySQL/PostgreSQL/Oracle.
+
+    \item[\textbf{Tres capas}] La aplicación cliente se conecta a un
+    \emph{servidor de aplicaciones} y éste, a su vez, dialoga con la
+    base. Se usa en sistemas más grandes (web, servicios) por motivos
+    de seguridad, escalabilidad y reutilización de lógica.
+\end{description}
+
+% =====================================================
+\section{¿Qué es JDBC?}
+% =====================================================
+
+\textbf{JDBC} (\emph{Java DataBase Connectivity}) es una API Java que
+permite ejecutar operaciones sobre bases de datos relacionales,
+\emph{independientemente del motor concreto}, usando SQL.
+
+Características principales:
+
+\begin{itemize}
+    \item Interacción con la base mediante SQL.
+    \item 100\% Java (no requiere bindings nativos).
+    \item Simple de usar: una decena de clases e interfaces alcanza.
+    \item Alto rendimiento.
+    \item Funciona contra cualquier base que provea un \emph{driver
+    JDBC}: MySQL, PostgreSQL, Oracle, Firebird, etc.
+\end{itemize}
+
+% -----------------------------------------------------
+\subsection{Arquitectura JDBC}
+% -----------------------------------------------------
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.8cm and 1.2cm,
+    box/.style={rectangle,draw,minimum width=3.6cm,minimum height=0.8cm,
+                font=\small},
+    db/.style={cylinder,shape border rotate=90,aspect=0.4,draw,
+               minimum width=2.4cm,minimum height=1.6cm,font=\small,
+               cylinder uses custom fill,cylinder body fill=white},
+    arr/.style={-{Latex},thick}]
+    \node[box] (app) {Aplicación Java};
+    \node[box,below=of app]  (api)  {API JDBC};
+    \node[box,below=of api]  (drv)  {Driver de la base particular};
+    \node[db,below=1.0cm of drv]    (db) {Base de Datos};
+    \draw[arr] (app) -- (api);
+    \draw[arr] (api) -- (drv);
+    \draw[arr] (drv) -- (db);
+\end{tikzpicture}
+\end{center}
+
+La aplicación Java conoce \emph{sólo} la API JDBC; el driver concreto
+traduce esa API al protocolo nativo del motor. Cambiar de motor
+cambia el driver y el URL, pero no las clases que usa la aplicación.
+
+% =====================================================
+\section{Componentes principales de la API}
+% =====================================================
+
+JDBC se construye alrededor de unos pocos componentes:
+
+\begin{center}
+\begin{tabular}{@{}p{4.4cm} p{9.5cm}@{}}
+\toprule
+\textbf{Componente} & \textbf{Rol} \\
+\midrule
+\texttt{DriverManager} (clase) &
+Carga el driver de la base elegida y crea conexiones. \\
+\texttt{Connection} (interfaz) &
+Representa una sesión activa contra la base. \\
+\texttt{Statement} y subclases (\texttt{PreparedStatement},
+\texttt{CallableStatement}) &
+Representan una sentencia SQL para ejecutar. \\
+\texttt{ResultSet} (interfaz) &
+Representa el conjunto de filas devueltas por una consulta. \\
+\texttt{DatabaseMetaData} (interfaz) &
+Provee información de metadatos: tablas, columnas, claves, etc. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================
+\section{URL JDBC}
+% =====================================================
+
+Cada conexión JDBC se identifica con una URL del tipo:
+
+\begin{lstlisting}
+jdbc:subprotocolo:fuente
+\end{lstlisting}
+
+\begin{itemize}
+    \item Cada driver tiene su propio \emph{subprotocolo}.
+    \item Cada subprotocolo tiene su propia sintaxis para la
+    \emph{fuente}.
+\end{itemize}
+
+\paragraph{Ejemplos.}
+
+\begin{lstlisting}
+jdbc:postgresql://host[:port]/database
+jdbc:postgresql://localhost:5432/postgres
+
+jdbc:mysql://host[:port]/database
+jdbc:mysql://localhost:3306/practico1a_mysql
+
+jdbc:oracle:thin:@//host:port/SID
+jdbc:oracle:thin:@//localhost:1521/XE
+\end{lstlisting}
+
+% =====================================================
+\section{Carga del driver y conexión}
+% =====================================================
+
+\subsection*{Clase \texttt{DriverManager}}
+
+Provee el método estático:
+
+\begin{lstlisting}
+DriverManager.getConnection(String url, String user, String password);
+\end{lstlisting}
+
+Devuelve un objeto que implementa \texttt{Connection} y representa
+una sesión con la base. El \emph{driver} debe estar previamente
+registrado; con \texttt{Class.forName(\dots)} se fuerza la carga
+explícita:
+
+\begin{lstlisting}
+// Ejemplo: conexion a MySQL.
+String driver   = "com.mysql.cj.jdbc.Driver";
+String url      = "jdbc:mysql://localhost/prueba";
+String username = "root";
+String password = "root";
+
+// 1) Carga del driver (si todavia no esta cargado).
+Class.forName(driver);
+
+// 2) Apertura de la conexion.
+Connection connection =
+    DriverManager.getConnection(url, username, password);
+\end{lstlisting}
+
+\begin{nota}
+\textbf{¿Es obligatorio \texttt{Class.forName}?} Desde JDBC 4 los
+drivers se autorregistran vía \texttt{ServiceLoader}, así que en
+muchos casos basta con tener el JAR en el \emph{classpath}. Aun así,
+el teórico y la mayoría de los ejemplos prácticos siguen usando
+\texttt{Class.forName} porque es la forma explícita y portable.
+\end{nota}
+
+% =====================================================
+\section{Interfaz \texttt{Connection}}
+% =====================================================
+
+Una \texttt{Connection} representa una sesión con la base. Permite:
+
+\begin{itemize}
+    \item ejecutar instrucciones SQL y obtener resultados;
+    \item obtener información de metadata (estructura) mediante
+    \texttt{getMetaData()};
+    \item manejar transacciones con \texttt{commit()} y
+    \texttt{rollback()}.
+\end{itemize}
+
+\subsection*{Métodos para crear sentencias}
+
+\begin{lstlisting}
+Statement         createStatement();
+PreparedStatement prepareStatement(String sql);
+CallableStatement prepareCall(String sql);
+\end{lstlisting}
+
+\paragraph{¿Por qué tres tipos?} Por optimización y por casos de
+uso: el \texttt{Statement} es el más genérico, el
+\texttt{PreparedStatement} permite parámetros y precompilación, y el
+\texttt{CallableStatement} se usa para invocar procedimientos
+almacenados.
+
+\subsection*{Transacciones: \texttt{setAutoCommit}}
+
+\begin{itemize}
+    \item Si \texttt{autoCommit} es \emph{verdadero} (valor por
+    defecto), \emph{cada} sentencia ejecutada es una transacción
+    independiente.
+    \item Si se pasa a \emph{falso}, hay que delimitar la transacción
+    explícitamente con \texttt{commit()} o \texttt{rollback()}.
+\end{itemize}
+
+\begin{lstlisting}
+connection.setAutoCommit(false);
+try {
+    // varias sentencias...
+    connection.commit();
+} catch (SQLException e) {
+    connection.rollback();
+    throw e;
+}
+\end{lstlisting}
+
+% =====================================================
+\section{Tipos de \texttt{Statement}}
+% =====================================================
+
+\subsection*{\texttt{Statement}}
+
+Representa una sentencia SQL \emph{estática}: no admite parámetros.
+Útil para sentencias armadas dinámicamente que no reciben datos del
+usuario, como las de exploración de metadatos.
+
+\subsection*{\texttt{PreparedStatement}}
+
+Hereda de \texttt{Statement} y representa una sentencia
+\emph{precompilada} con parámetros (placeholders \texttt{?}).
+Ventajas:
+
+\begin{itemize}
+    \item \textbf{Rendimiento}: el motor analiza y planifica una sola
+    vez; las ejecuciones siguientes reutilizan el plan.
+    \item \textbf{Seguridad}: como los parámetros viajan por separado
+    de la sentencia, evita \emph{SQL injection}.
+    \item \textbf{Conversión de tipos}: el driver se encarga de
+    convertir \texttt{int}, \texttt{String}, \texttt{Date}, etc. al
+    tipo SQL correspondiente.
+\end{itemize}
+
+\subsection*{\texttt{CallableStatement}}
+
+Hereda de \texttt{Statement}; su objetivo es la \emph{ejecución de
+procedimientos almacenados}. La sintaxis estándar (\emph{escape
+call}) es:
+
+\begin{lstlisting}
+{ ? = call funcion(?, ?) }   // funcion con valor de retorno
+{ call procedimiento(?, ?) } // procedimiento sin retorno
+\end{lstlisting}
+
+Para parámetros \texttt{OUT} o \texttt{INOUT} hay que registrarlos
+con \texttt{registerOutParameter(int pos, int sqlType)}.
+
+% =====================================================
+\section{Parámetros en la creación de \texttt{Statement}}
+% =====================================================
+
+\texttt{Connection} ofrece versiones de \texttt{createStatement} y
+\texttt{prepareStatement} que toman parámetros adicionales para
+controlar el \texttt{ResultSet} resultante.
+
+\subsection*{Tipo de \texttt{ResultSet}}
+
+\begin{itemize}
+    \item \texttt{ResultSet.TYPE\_FORWARD\_ONLY} (default): el cursor
+    sólo avanza hacia adelante.
+    \item \texttt{ResultSet.TYPE\_SCROLL\_INSENSITIVE}: el cursor se
+    mueve en ambos sentidos; \emph{no} ve actualizaciones posteriores
+    a la consulta.
+    \item \texttt{ResultSet.TYPE\_SCROLL\_SENSITIVE}: ambos sentidos
+    y refleja las actualizaciones cuando se producen.
+\end{itemize}
+
+\subsection*{Concurrencia / actualizabilidad}
+
+\begin{itemize}
+    \item \texttt{ResultSet.CONCUR\_READ\_ONLY} (default): sólo
+    lectura.
+    \item \texttt{ResultSet.CONCUR\_UPDATABLE}: el resultado es
+    actualizable desde el propio \texttt{ResultSet}
+    (\texttt{updateXxx}, \texttt{insertRow}, \texttt{deleteRow}).
+\end{itemize}
+
+% =====================================================
+\section{Ejecución de sentencias}
+% =====================================================
+
+Métodos principales de \texttt{Statement}:
+
+\begin{itemize}
+    \item \texttt{ResultSet executeQuery(String sql)}: para
+    \texttt{SELECT}; devuelve un \texttt{ResultSet}.
+    \item \texttt{int executeUpdate(String sql)}: para
+    \texttt{INSERT}, \texttt{UPDATE} o \texttt{DELETE}; devuelve la
+    cantidad de filas afectadas.
+    \item \texttt{boolean execute(String sql)}: para sentencias que
+    pueden devolver múltiples resultados; \texttt{true} si el primer
+    resultado es \texttt{ResultSet}.
+\end{itemize}
+
+% =====================================================
+\section{Interfaz \texttt{ResultSet}}
+% =====================================================
+
+Un \texttt{ResultSet} provee acceso a la tabla generada por la
+ejecución de una consulta. Conceptualmente es un puntero (cursor)
+que apunta a una fila a la vez.
+
+\subsection*{Recorrido y cierre}
+
+\begin{itemize}
+    \item \texttt{boolean next()}: avanza el cursor a la próxima
+    fila. La \emph{primera} llamada activa la primera fila. Devuelve
+    \texttt{false} cuando se queda sin filas.
+    \item \texttt{void close()}: libera el \texttt{ResultSet} (en la
+    práctica, conviene usar \texttt{try-with-resources}).
+\end{itemize}
+
+\subsection*{Lectura de columnas}
+
+\begin{lstlisting}
+<Tipo> get<Tipo>(int columnIndex);    // por indice (empieza en 1)
+<Tipo> get<Tipo>(String columnName);  // por nombre  (menos eficiente)
+\end{lstlisting}
+
+\paragraph{Ejemplos.}
+
+\begin{lstlisting}
+int    nro    = rs.getInt("nro_cliente");
+String nombre = rs.getString("nombre");
+java.math.BigDecimal monto = rs.getBigDecimal("monto");
+java.sql.Date fecha = rs.getDate("fecha");
+\end{lstlisting}
+
+\subsection*{Modificación de columnas (cursor actualizable)}
+
+\begin{lstlisting}
+update<Tipo>(String columnLabel, <Tipo> valor);
+int findColumn(String columnName);  // indice de la columna por nombre
+\end{lstlisting}
+
+\subsection*{Navegación (en \texttt{ResultSet} \emph{scrollable})}
+
+\begin{itemize}
+    \item \texttt{previous()}: una fila atrás.
+    \item \texttt{first()}, \texttt{last()}: a la primera/última.
+    \item \texttt{beforeFirst()}, \texttt{afterLast()}: antes de la
+    primera o después de la última (sin posicionar en una fila
+    válida).
+    \item \texttt{relative(int n)}: salta \emph{n} filas relativas a
+    la actual.
+    \item \texttt{absolute(int n)}: salta a la fila \emph{n}
+    absoluta.
+\end{itemize}
+
+\subsection*{Ejemplo completo}
+
+\begin{lstlisting}
+Statement statement = connection.createStatement();
+String query = "SELECT * FROM persona";
+
+// Envia el query a la base y almacena el resultado.
+ResultSet resultSet = statement.executeQuery(query);
+
+// Recorre los resultados.
+while (resultSet.next()) {
+    System.out.print(" DNI: "    + resultSet.getString("DNI"));
+    System.out.print("; Nombre: " + resultSet.getString("nombre"));
+    System.out.print("; Email: "  + resultSet.getString("email"));
+    System.out.println();
+}
+\end{lstlisting}
+
+% =====================================================
+\section{Extracción de metadatos: \texttt{DatabaseMetaData}}
+% =====================================================
+
+Con \texttt{Connection.getMetaData()} se obtiene un objeto
+\texttt{DatabaseMetaData} que expone la \emph{estructura} de la base.
+Es la pieza central del Ejercicio 3 del práctico.
+
+\subsection*{Métodos más usados}
+
+\paragraph{\texttt{getTables}.}
+
+\begin{lstlisting}
+ResultSet getTables(String catalog, String schemaPattern,
+                    String tableNamePattern, String[] types);
+\end{lstlisting}
+
+Devuelve un \texttt{ResultSet} con al menos las columnas:
+
+\begin{itemize}
+    \item \texttt{TABLE\_CAT} (catálogo, puede ser \texttt{null}).
+    \item \texttt{TABLE\_SCHEM} (esquema, puede ser \texttt{null}).
+    \item \texttt{TABLE\_NAME} (nombre).
+    \item \texttt{TABLE\_TYPE}: \texttt{TABLE}, \texttt{VIEW},
+    \texttt{SYSTEM TABLE}, \texttt{GLOBAL TEMPORARY}, etc.
+    \item \texttt{REMARKS} (comentarios).
+\end{itemize}
+
+\paragraph{\texttt{getColumns}.}
+
+\begin{lstlisting}
+ResultSet getColumns(String catalog, String schemaPattern,
+                     String tableNamePattern, String columnNamePattern);
+\end{lstlisting}
+
+Cada fila describe una columna; el \texttt{ResultSet} tiene al menos
+20 columnas. Los códigos de tipo de dato son los definidos en
+\texttt{java.sql.Types}.
+
+\paragraph{\texttt{getProcedures}.}
+
+\begin{lstlisting}
+ResultSet getProcedures(String catalog, String schemaPattern,
+                        String procedureNamePattern);
+\end{lstlisting}
+
+Devuelve los procedimientos almacenados disponibles. Las constantes
+\texttt{procedureColumnIn}, \texttt{procedureColumnOut}, etc.\ del
+mismo \texttt{DatabaseMetaData} clasifican los parámetros.
+
+\paragraph{Otros métodos útiles para el Ejercicio 3.}
+
+\begin{itemize}
+    \item \texttt{getPrimaryKeys(catalog, schema, table)}: devuelve
+    las columnas de la PK con \texttt{KEY\_SEQ}.
+    \item \texttt{getIndexInfo(catalog, schema, table, unique,
+    approximate)}: devuelve los índices; combinado con un filtro
+    sobre los que coinciden con la PK, sirve para detectar
+    \emph{claves únicas adicionales}.
+    \item \texttt{getImportedKeys(catalog, schema, table)} y
+    \texttt{getExportedKeys(\dots)}: claves foráneas \emph{salientes}
+    o \emph{entrantes}.
+\end{itemize}
+
+\subsection*{Ejemplo: listar esquemas en Oracle}
+
+\begin{lstlisting}
+String driver   = "oracle.jdbc.driver.OracleDriver";
+String url      = "jdbc:oracle:thin:@//localhost:1521/XE";
+String username = "USUARIO1";
+String password = "USUARIO1";
+
+Class.forName(driver);
+Connection connection = DriverManager.getConnection(url, username, password);
+
+DatabaseMetaData metaData = connection.getMetaData();
+ResultSet resultSetSchemas = metaData.getSchemas();
+
+System.out.println("Esquemas de la Base de datos");
+while (resultSetSchemas.next()) {
+    System.out.println("  esquema: " + resultSetSchemas.getString(1));
+}
+\end{lstlisting}
+
+\subsection*{Ejemplo: listar tablas en PostgreSQL}
+
+\begin{lstlisting}
+String driver   = "org.postgresql.Driver";
+String url      = "jdbc:postgresql://localhost:5432";
+String username = "postgres";
+String password = "root";
+
+Class.forName(driver);
+Connection connection = DriverManager.getConnection(url, username, password);
+
+String[] tipo = { "TABLE" };
+DatabaseMetaData metaData = connection.getMetaData();
+ResultSet rs = metaData.getTables("Proyecto", "comparador", null, tipo);
+
+while (rs.next()) {
+    System.out.println("  catalogo: " + rs.getString(1));
+    System.out.println("  esquema: "  + rs.getString(2));
+    System.out.println("  nombre: "   + rs.getString(3));
+    System.out.println("  tipo: "     + rs.getString(4));
+    System.out.println("  comentarios: " + rs.getString(5));
+}
+\end{lstlisting}
+
+% =====================================================
+\section{Acceso al catálogo (cuando \texttt{DatabaseMetaData} no alcanza)}
+% =====================================================
+
+Hay información que la API \texttt{DatabaseMetaData} no expone
+(detalles muy específicos de un motor). En esos casos se va
+\emph{directamente al catálogo}: en MySQL existe la base
+\texttt{information\_schema} y \texttt{mysql}; en PostgreSQL hay dos
+catálogos por base, ANSI y PostgreSQL; en Oracle se usan las vistas
+\texttt{USER\_*}/\texttt{ALL\_*}/\texttt{DBA\_*}.
+
+\paragraph{Ejemplo (MySQL).} Listar nombres y código de los
+procedimientos del esquema \texttt{procedimientos}:
+
+\begin{lstlisting}
+SELECT specific_name AS nombre, routine_definition AS codigo
+  FROM information_schema.ROUTINES R
+ WHERE routine_schema = 'procedimientos';
+\end{lstlisting}
+
+% =====================================================
+\section{Correspondencia entre tipos SQL y Java}
+% =====================================================
+
+JDBC define una correspondencia estándar entre los tipos SQL y los
+tipos Java; los métodos \texttt{getXxx}/\texttt{setXxx} respetan esa
+tabla. Los datos que cruzan la red usan internamente
+\texttt{java.sql.Types} como contrato.
+
+\begin{center}
+\begin{tabular}{@{}l l@{}}
+\toprule
+\textbf{Tipo SQL} & \textbf{Tipo Java} \\
+\midrule
+\texttt{CHAR}, \texttt{VARCHAR}, \texttt{LONGVARCHAR} &
+\texttt{String} \\
+\texttt{NUMERIC}, \texttt{DECIMAL} & \texttt{java.math.BigDecimal} \\
+\texttt{BIT} & \texttt{boolean} \\
+\texttt{TINYINT} & \texttt{byte} \\
+\texttt{SMALLINT} & \texttt{short} \\
+\texttt{INTEGER} & \texttt{int} \\
+\texttt{BIGINT} & \texttt{long} \\
+\texttt{REAL} & \texttt{float} \\
+\texttt{FLOAT}, \texttt{DOUBLE} & \texttt{double} \\
+\texttt{BINARY}, \texttt{VARBINARY}, \texttt{LONGVARBINARY} &
+\texttt{byte[]} \\
+\texttt{DATE} & \texttt{java.sql.Date} \\
+\texttt{TIME} & \texttt{java.sql.Time} \\
+\texttt{TIMESTAMP} & \texttt{java.sql.Timestamp} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{nota}
+\textbf{\texttt{NUMERIC}/\texttt{DECIMAL} $\to$ \texttt{BigDecimal}.}
+Por eso en el Ejercicio 2 del práctico la cotización máxima se lee
+con \texttt{getBigDecimal(1)}: la columna SQL es
+\texttt{NUMERIC(12,4)}.
+\end{nota}
+
+% =====================================================
+\section{Persistencia de objetos en Java}
+% =====================================================
+
+Más allá de JDBC, la plataforma Java define APIs para
+\emph{persistir objetos} en bases relacionales u objeto-relacionales:
+\textbf{JDO} (\emph{Java Data Objects}), \textbf{JPA} (\emph{Java
+Persistence API}), etc. Sus implementaciones (Hibernate, EclipseLink,
+JPOX, OpenJPA\dots) terminan apoyándose en JDBC para hablar con el
+motor.
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.8cm and 1.2cm,
+    box/.style={rectangle,draw,minimum width=4.2cm,minimum height=0.8cm,
+                font=\small},
+    db/.style={cylinder,shape border rotate=90,aspect=0.4,draw,
+               minimum width=2.4cm,minimum height=1.6cm,font=\small,
+               cylinder uses custom fill,cylinder body fill=white},
+    arr/.style={-{Latex},thick}]
+    \node[box] (app) {Aplicación Java};
+    \node[box,below=of app]  (api)  {API (JDO, JPA, \dots)};
+    \node[box,below=of api]  (impl) {Impl. de la API (JPOX, Hibernate)};
+    \node[box,below=of impl] (jdbc) {Driver JDBC};
+    \node[db,below=1.0cm of jdbc]   (db) {DB relacional};
+    \draw[arr] (app)  -- node[right,font=\scriptsize]{utiliza}    (api);
+    \draw[arr] (impl) -- node[right,font=\scriptsize]{implementa} (api);
+    \draw[arr] (impl) -- node[right,font=\scriptsize]{utiliza}    (jdbc);
+    \draw[arr] (jdbc) -- node[right,font=\scriptsize]{accede}     (db);
+\end{tikzpicture}
+\end{center}
+
+% =====================================================
+\section{Patrón típico con manejo de recursos}
+% =====================================================
+
+Los recursos JDBC son sensibles: si quedan abiertos pueden agotar el
+\emph{pool} del motor. Desde Java 7, el patrón estándar es
+\texttt{try-with-resources}, que cierra automáticamente cualquier
+\texttt{AutoCloseable}.
+
+\begin{lstlisting}
+String sql = "SELECT id, nombre FROM persona WHERE id = ?";
+
+try (Connection connection = DriverManager.getConnection(url, user, pass);
+     PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+
+    preparedStatement.setInt(1, 42);
+
+    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+        while (resultSet.next()) {
+            int    id     = resultSet.getInt("id");
+            String nombre = resultSet.getString("nombre");
+            // ...
+        }
+    }
+}
+\end{lstlisting}
+
+% =====================================================
+\section{Conexión con el Práctico 4}
+% =====================================================
+
+\begin{itemize}
+    \item \textbf{Ejercicio 1}: usa \texttt{DriverManager},
+    \texttt{Connection}, \texttt{PreparedStatement} (con
+    \texttt{setInt}/\texttt{setString}/\texttt{executeUpdate}/
+    \texttt{executeQuery}) y \texttt{ResultSet} con
+    \texttt{next()}/\texttt{getXxx}. Es el caso ABM clásico.
+    \item \textbf{Ejercicio 2}: agrega \texttt{CallableStatement} para
+    invocar la función \texttt{fn\_actualizar\_cotizacion\_maxima} y
+    leer un parámetro \texttt{OUT} con
+    \texttt{registerOutParameter(\dots, Types.NUMERIC)} y
+    \texttt{getBigDecimal(\dots)}. Suma un \emph{fallback} con
+    \texttt{SELECT} para entornos PostgreSQL donde el escape
+    \texttt{\{ ? = call \dots \}} no funciona.
+    \item \textbf{Ejercicio 3}: usa \texttt{DatabaseMetaData} con
+    \texttt{getTables}, \texttt{getColumns}, \texttt{getPrimaryKeys},
+    \texttt{getIndexInfo} y \texttt{getImportedKeys}. Es
+    independiente del motor (PostgreSQL u Oracle) cambiando sólo el
+    \texttt{.properties}.
+\end{itemize}
+
+% =====================================================
+\section{Ideas clave para repasar antes del parcial}
+% =====================================================
+
+\begin{enumerate}
+    \item \textbf{JDBC es la API Java estándar de acceso a bases
+    relacionales}; cada motor aporta su \emph{driver} concreto.
+    \item \textbf{URL JDBC}: \texttt{jdbc:subprotocolo:fuente}.
+    Conviene tenerla externalizada en un \texttt{.properties}.
+    \item \textbf{Pasos básicos de conexión}: \texttt{Class.forName}
+    + \texttt{DriverManager.getConnection(url, user, pass)}.
+    \item \textbf{\texttt{Connection}} representa una sesión y es la
+    fábrica de \texttt{Statement}, \texttt{PreparedStatement} y
+    \texttt{CallableStatement}.
+    \item \textbf{\texttt{Statement}} (estático), \emph{vs.}
+    \textbf{\texttt{PreparedStatement}} (parametrizado, precompilado,
+    seguro), \emph{vs.} \textbf{\texttt{CallableStatement}}
+    (procedimientos almacenados).
+    \item \textbf{Métodos de ejecución}: \texttt{executeQuery} (devuelve
+    \texttt{ResultSet}), \texttt{executeUpdate} (devuelve
+    \texttt{int}), \texttt{execute} (genérico).
+    \item \textbf{\texttt{ResultSet}} es un cursor sobre filas;
+    \texttt{next()} lo avanza, \texttt{getXxx} lee columnas (por
+    índice o por nombre).
+    \item \textbf{Tipos de \texttt{ResultSet}}: \texttt{FORWARD\_ONLY}
+    (default), \texttt{SCROLL\_INSENSITIVE}, \texttt{SCROLL\_SENSITIVE}.
+    Concurrencia: \texttt{CONCUR\_READ\_ONLY} o
+    \texttt{CONCUR\_UPDATABLE}.
+    \item \textbf{Transacciones}: \texttt{setAutoCommit(false)} +
+    \texttt{commit()}/\texttt{rollback()}; con \texttt{autoCommit}
+    \texttt{true} cada sentencia es su propia transacción.
+    \item \textbf{Procedimientos almacenados}: \emph{escape call}
+    \texttt{\{ ? = call f(?) \}}, parámetros \texttt{IN} con
+    \texttt{setXxx}, \texttt{OUT} con \texttt{registerOutParameter}.
+    \item \textbf{\texttt{DatabaseMetaData}} expone tablas, columnas,
+    PK, FK, índices, procedimientos, esquemas. Es la herramienta del
+    Ejercicio 3.
+    \item \textbf{Correspondencia de tipos}: \texttt{NUMERIC} $\to$
+    \texttt{BigDecimal}, \texttt{INTEGER} $\to$ \texttt{int},
+    \texttt{VARCHAR} $\to$ \texttt{String}, \texttt{DATE} $\to$
+    \texttt{java.sql.Date}, \texttt{TIMESTAMP} $\to$
+    \texttt{java.sql.Timestamp}.
+    \item \textbf{\texttt{try-with-resources}} para
+    \texttt{Connection}, \texttt{Statement} y \texttt{ResultSet}: nunca
+    se debe olvidar el \texttt{close()}.
+    \item \textbf{Si \texttt{DatabaseMetaData} no alcanza}, se va al
+    catálogo del motor (\texttt{information\_schema} en
+    MySQL/PostgreSQL, vistas \texttt{USER\_*} en Oracle).
+    \item \textbf{Por encima de JDBC} viven las APIs de
+    \emph{persistencia de objetos} (JDO, JPA), pero su implementación
+    sigue dialogando con la base por JDBC.
+\end{enumerate}
+
+% =====================================================
+\section*{Resumen final}
+\addcontentsline{toc}{section}{Resumen final}
+% =====================================================
+
+JDBC es la pieza que conecta el código de aplicación con la base. Su
+arquitectura es minimalista pero potente: un \emph{driver} por motor,
+una \emph{conexión} por sesión, distintos tipos de \emph{statement}
+según el caso de uso, y un \emph{ResultSet} para recorrer filas.
+\texttt{DatabaseMetaData} agrega una capa de introspección que es
+útil cuando hace falta conocer la estructura sin recurrir al
+catálogo del motor.
+
+Si quedan firmes los cuatro bloques --- \emph{conexión}, \emph{tipo de
+statement}, \emph{recorrido de \texttt{ResultSet}} y \emph{cierre con
+\texttt{try-with-resources}} ---, el Práctico 4 se traduce
+directamente: cada uno de los tres ejercicios es una variación sobre
+un mismo esqueleto, intercambiando \texttt{PreparedStatement},
+\texttt{CallableStatement} y \texttt{DatabaseMetaData} según lo que
+pida la consigna.
+
+\end{document}

@@ -1,0 +1,1143 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Resumen Teórico --- Triggers y Stored Procedures}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={NUMERIC,VARCHAR,DECIMAL,DATE,TIMESTAMP,TIME,
+        BIGINT,VARCHAR2,NUMBER,ENUM,SCHEMA,SEQUENCE,TRIGGER,
+        BEFORE,AFTER,EACH,ROW,STATEMENT,NEXTVAL,DUAL,RAISE,EXCEPTION,LOOP,
+        DATABASE,DOMAIN,GRANT,REVOKE,ROLE,USER,LOGIN,NOLOGIN,
+        OPTION,REFERENCES,RESTRICT,CASCADE,
+        AUTO\_INCREMENT,IF,EXISTS,ALTER,SHOW,USE,
+        SEARCH\_PATH,EXECUTE,IMMEDIATE,PROCEDURE,FUNCTION,
+        DELIMITER,SIGNAL,SQLSTATE,MESSAGE\_TEXT,
+        DECLARE,BEGIN,END,RETURNS,LANGUAGE,PLPGSQL,
+        OR,REPLACE,RETURN,FOR,IN,OUT,INOUT,
+        WITH,FROM,TO,ON,AS,AND,OR,IS,NOT,NULL,
+        INSERT,UPDATE,DELETE,SELECT,
+        SECURITY,INVOKER,DEFINER,ROUTINE,PROFILE,
+        BIGSERIAL,SERIAL,IDENTITY,GENERATED,ALWAYS,
+        CONTAINS,READS,SQL,DATA,MODIFIES,COMMENT,
+        CONTINUE,EXIT,UNDO,HANDLER,CURSOR,FETCH,OPEN,CLOSE,MOVE,
+        SQLEXCEPTION,SQLWARNING,FOUND,NOT,
+        REPEAT,UNTIL,WHILE,LEAVE,ITERATE,CASE,WHEN,THEN,ELSE,
+        DBMS\_OUTPUT,PUT\_LINE,RAISE\_APPLICATION\_ERROR,SYSDATE,SQLCODE,SQLERRM,
+        ROWTYPE,RECORD,SYSTEM,SYSDBA,DEFAULT,TEMPORARY,RULE,INSTEAD,ALSO,NEW,OLD},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstset{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+\title{Resumen Teórico --- Triggers y Procedimientos Almacenados\\[4pt]
+       \large Bases de Datos II --- Práctico N.\textsuperscript{o} 3}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Resumen Teórico}}\\[6pt]
+    {\large Triggers y Procedimientos Almacenados\\[2pt]
+    (Server Programming) --- Práctico N.\textsuperscript{o} 3}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Material elaborado a partir del teórico
+    \emph{Teorico\_4\_Triggers\_y\_Procedimientos\_Almacenados}.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introducción}
+% =====================================================
+
+Hasta el Práctico 2, todo lo que escribíamos en SQL se ejecutaba como
+una sentencia suelta enviada por el cliente. El Práctico 3 introduce
+la idea de \textbf{programación del lado servidor} (\emph{server
+programming}): bloques de código que viven dentro del motor y se
+disparan al ser invocados por un cliente o, automáticamente, ante
+ciertos eventos sobre las tablas. Hay dos grandes herramientas:
+
+\begin{description}[leftmargin=2.4cm,style=nextline]
+    \item[\textbf{Procedimientos y funciones almacenadas}]
+    Programas con SQL embebido, parámetros, variables, control de
+    flujo y manejo de errores. Se invocan explícitamente desde el
+    cliente con \texttt{CALL} (MySQL/PostgreSQL) o desde un bloque
+    \texttt{BEGIN \dots\ END} (Oracle).
+
+    \item[\textbf{Triggers (disparadores)}]
+    Procedimientos que el motor ejecuta \emph{automáticamente} cuando
+    ocurre un evento sobre una tabla (típicamente
+    \texttt{INSERT}/\texttt{UPDATE}/\texttt{DELETE}). Son ideales para
+    auditoría, mantener consistencia entre tablas relacionadas y
+    normalización de datos antes de su persistencia.
+\end{description}
+
+\begin{nota}
+\textbf{Idea clave.} El estándar SQL:1999 incorpora \emph{stored
+procedures} y \emph{triggers}, pero cada motor mantiene su propio
+lenguaje: \textbf{PL/SQL} en Oracle, \textbf{PL/pgSQL} en PostgreSQL,
+\textbf{SQL/PSM} (sintaxis SQL:2003) en MySQL. La lógica conceptual
+es la misma; lo que cambia es la sintaxis y los detalles de cada
+motor.
+\end{nota}
+
+% =====================================================
+\section{Procedimientos almacenados: visión general}
+% =====================================================
+
+Un \textbf{procedimiento almacenado} (\emph{stored procedure}) es un
+programa que contiene comandos SQL y se almacena dentro del servidor
+de la base de datos. Posee parámetros de entrada y salida y puede ser
+invocado por un cliente como si fuera una rutina externa, pero corre
+\emph{dentro} del motor.
+
+Los procedimientos están disponibles desde el estándar SQL:1999.
+PostgreSQL incluso permite escribirlos en lenguajes externos (C,
+Java, Python, etc.). En este resumen nos centramos en los lenguajes
+``nativos'' que son los que se usan en el práctico:
+
+\begin{itemize}
+    \item \textbf{MySQL} sigue la sintaxis \textbf{SQL:2003} (lenguaje
+    \emph{SQL/PSM}).
+    \item \textbf{PostgreSQL} usa \textbf{PL/pgSQL}.
+    \item \textbf{Oracle} usa \textbf{PL/SQL}.
+\end{itemize}
+
+% -----------------------------------------------------
+\subsection{Ventajas y desventajas}
+% -----------------------------------------------------
+
+\begin{center}
+\begin{tabular}{@{}p{3.5cm} p{10.5cm}@{}}
+\toprule
+\textbf{Ventaja} & \textbf{Por qué importa} \\
+\midrule
+Rendimiento & Se ejecutan en el motor, sin viaje de datos al
+cliente. \\
+Compilación previa & Quedan analizados y optimizados al
+crearse, no en cada llamada. \\
+Menos tráfico de red & Una sola llamada en lugar de N sentencias. \\
+Centralización & Forman parte de la base; siempre están
+disponibles. \\
+Seguridad & Se puede otorgar \texttt{EXECUTE} sobre el
+procedimiento sin dar permisos sobre las tablas que toca. \\
+Encapsulamiento & El cliente invoca ``\emph{eliminar cliente}''
+sin conocer los detalles internos. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Desventaja principal.} Cada motor tiene su propio dialecto
+y, por lo tanto, migrar lógica entre motores es trabajoso. Es el
+precio del poder.
+
+% =====================================================
+\section{Procedimientos almacenados en MySQL (SQL/PSM)}
+% =====================================================
+
+MySQL incorpora \emph{triggers} y \emph{stored procedures} desde la
+versión 5. La sintaxis básica es:
+
+\begin{lstlisting}
+CREATE PROCEDURE sp_name ([parameter [, ...]]) [characteristic ...]
+   routine_body;
+
+CREATE FUNCTION sp_name ([parameter [, ...]]) RETURNS type
+   [characteristic ...] routine_body;
+
+parameter:     [IN | OUT | INOUT] param_name type
+characteristic: LANGUAGE SQL
+              | { CONTAINS SQL | NO SQL | READS SQL DATA | MODIFIES SQL DATA }
+              | SQL SECURITY { DEFINER | INVOKER }
+              | COMMENT 'string'
+\end{lstlisting}
+
+\paragraph{Parámetros \texttt{IN}/\texttt{OUT}/\texttt{INOUT}.}
+\texttt{IN} es entrada (por valor), \texttt{OUT} es de salida
+(escrito por la rutina), e \texttt{INOUT} se comporta como ambos.
+Si no se especifica el modo, MySQL asume \texttt{IN}.
+
+\paragraph{Características.} \texttt{CONTAINS SQL} indica que el
+cuerpo no lee ni modifica datos; \texttt{READS SQL DATA} sólo lee;
+\texttt{MODIFIES SQL DATA} puede modificar. \texttt{SQL SECURITY
+DEFINER} (default) ejecuta con permisos de quien creó la rutina;
+\texttt{INVOKER} con los del invocador.
+
+% -----------------------------------------------------
+\subsection{Estructura del lenguaje}
+% -----------------------------------------------------
+
+El \emph{routine\_body} se construye con los siguientes elementos:
+
+\begin{itemize}
+    \item Sentencias compuestas \texttt{BEGIN \dots\ END} (bloques).
+    \item Sentencias \texttt{DECLARE} para variables locales,
+    condiciones, \emph{handlers} y cursores.
+    \item Asignación de variables (\texttt{SET}, \texttt{SELECT \dots\
+    INTO}).
+    \item Sentencias de control de flujo: \texttt{IF}, \texttt{CASE},
+    \texttt{LOOP}, \texttt{LEAVE}, \texttt{ITERATE}, \texttt{REPEAT},
+    \texttt{WHILE}.
+    \item Cursores para recorrer resultados de \texttt{SELECT} fila
+    por fila.
+    \item Manejo de excepciones mediante \emph{handlers}.
+\end{itemize}
+
+\paragraph{Bloques \texttt{BEGIN \dots\ END}.} Todo procedimiento no
+trivial está delimitado por \texttt{BEGIN \dots\ END}. Pueden
+anidarse: cada subbloque tiene su propio scope de variables, sus
+declaraciones y sus \emph{handlers}.
+
+% -----------------------------------------------------
+\subsection{Variables locales y asignación}
+% -----------------------------------------------------
+
+\begin{lstlisting}
+-- Declaracion (en el orden correcto: declaraciones siempre arriba del bloque).
+DECLARE var_name type [DEFAULT value];
+DECLARE x INT;
+DECLARE saldo DECIMAL(12,2) DEFAULT 0;
+
+-- Asignacion clasica.
+SET x = 10;
+
+-- Asignacion via SELECT.
+SELECT MAX(precio) INTO x FROM producto;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{\emph{Handlers} y manejo de excepciones}
+% -----------------------------------------------------
+
+Los \emph{handlers} reaccionan ante condiciones (errores o avisos)
+durante la ejecución:
+
+\begin{lstlisting}
+DECLARE handler_type HANDLER FOR condition_value [, ...] sp_statement;
+
+handler_type:    CONTINUE | EXIT | UNDO
+condition_value: SQLSTATE sqlstate_value
+              | condition_name
+              | SQLWARNING
+              | NOT FOUND
+              | SQLEXCEPTION
+              | mysql_error_code
+\end{lstlisting}
+
+\paragraph{Tipos de \emph{handler}.}
+
+\begin{itemize}
+    \item \texttt{CONTINUE}: ejecuta la sentencia del handler y
+    continúa con la siguiente sentencia del programa.
+    \item \texttt{EXIT}: ejecuta el handler y \emph{termina} el
+    bloque que lo contiene.
+    \item \texttt{UNDO}: deshace lo hecho dentro del bloque (no
+    siempre soportado).
+\end{itemize}
+
+\paragraph{Tipos de condición.}
+
+\begin{itemize}
+    \item \texttt{SQLSTATE 'xxxxx'}: estándar, comparten todos los
+    motores.
+    \item \texttt{SQLWARNING}: cualquier \texttt{SQLSTATE} que empiece
+    con \texttt{01}.
+    \item \texttt{NOT FOUND}: cualquier \texttt{SQLSTATE} que empiece
+    con \texttt{02}. Es el típico ``ya no hay más filas'' de un
+    cursor.
+    \item \texttt{SQLEXCEPTION}: todos los \texttt{SQLSTATE}
+    restantes.
+    \item \texttt{mysql\_error\_code}: códigos específicos de MySQL.
+\end{itemize}
+
+\paragraph{Lanzar excepciones del usuario.} Desde MySQL 5.5:
+
+\begin{lstlisting}
+SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'lanzo una excepcion';
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Cursores}
+% -----------------------------------------------------
+
+Un \emph{cursor} permite recorrer fila por fila el resultado de una
+consulta. Su uso típico tiene cuatro etapas: \texttt{DECLARE},
+\texttt{OPEN}, repetidos \texttt{FETCH}, \texttt{CLOSE}.
+
+\begin{lstlisting}
+-- Declaracion.
+DECLARE cursor_name CURSOR FOR select_statement;
+
+-- Operaciones.
+OPEN  cursor_name;
+FETCH cursor_name INTO var1 [, var2, ...];
+CLOSE cursor_name;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Sentencias de control de flujo}
+% -----------------------------------------------------
+
+\begin{itemize}
+    \item \texttt{IF cond THEN \dots\ ELSE \dots\ END IF;}
+    \item \texttt{CASE \dots\ WHEN \dots\ THEN \dots\ END CASE;}
+    \item \texttt{LOOP \dots\ END LOOP;} (con \texttt{LEAVE} para
+    salir e \texttt{ITERATE} para volver al principio).
+    \item \texttt{REPEAT \dots\ UNTIL cond END REPEAT;}
+    \item \texttt{WHILE cond DO \dots\ END WHILE;}
+\end{itemize}
+
+\paragraph{REPEAT (semántica).} Las sentencias del bloque se ejecutan
+\textbf{al menos una vez}, y se repiten hasta que la condición
+\texttt{search\_condition} se vuelva verdadera.
+
+\begin{lstlisting}
+REPEAT
+   statement_list
+UNTIL search_condition
+END REPEAT;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Ejemplo completo: cursor + handler + REPEAT}
+% -----------------------------------------------------
+
+Recorre \texttt{tabla1} filtrando por un parámetro y, según una
+comparación entre dos columnas, inserta en \texttt{tabla2} o en
+\texttt{tabla3}:
+
+\begin{lstlisting}
+CREATE PROCEDURE cursordemo(IN parametro INT)
+BEGIN
+    DECLARE done INT DEFAULT 0;
+    DECLARE a1 CHAR(16);
+    DECLARE b1, c1 INT;
+
+    DECLARE cursor1 CURSOR FOR
+        SELECT a, b, c FROM tabla1 WHERE id < parametro;
+
+    -- Cuando NOT FOUND (SQLSTATE 02000), termina el recorrido.
+    DECLARE CONTINUE HANDLER FOR SQLSTATE '02000'
+    BEGIN
+        SET done = 1;
+    END;
+
+    OPEN cursor1;
+    REPEAT
+        FETCH cursor1 INTO a1, b1, c1;
+        IF NOT done THEN
+            IF b1 < c1 THEN
+                INSERT INTO tabla2 VALUES (a1, b1);
+            ELSE
+                INSERT INTO tabla3 VALUES (a1, c1);
+            END IF;
+        END IF;
+    UNTIL done END REPEAT;
+    CLOSE cursor1;
+END;
+\end{lstlisting}
+
+\paragraph{Lectura del ejemplo.} El \emph{handler} de tipo
+\texttt{CONTINUE} captura el aviso ``no hay más filas'' y pone
+\texttt{done = 1}. El bucle \texttt{REPEAT} hace \texttt{FETCH}
+dentro y termina cuando \texttt{done} pasa a 1.
+
+% -----------------------------------------------------
+\subsection{Modificación e invocación}
+% -----------------------------------------------------
+
+Para cambiar las características de una rutina existente (por ejemplo,
+cambiar de \texttt{DEFINER} a \texttt{INVOKER}, o agregar
+\texttt{COMMENT}):
+
+\begin{lstlisting}
+ALTER {PROCEDURE | FUNCTION} sp_name [characteristic ...];
+\end{lstlisting}
+
+Para invocar un procedimiento se usa \texttt{CALL}:
+
+\begin{lstlisting}
+CALL nombreProcedimiento([parametroActual [, ...]]);
+CALL cursordemo(2);
+\end{lstlisting}
+
+% =====================================================
+\section{Procedimientos y funciones en PostgreSQL (PL/pgSQL)}
+% =====================================================
+
+PostgreSQL implementa funciones (\texttt{CREATE FUNCTION}) y, desde la
+versión 11, también \emph{procedures} (\texttt{CREATE PROCEDURE}).
+Pueden escribirse en distintos lenguajes; el de uso más común es
+\textbf{PL/pgSQL}, orientado a bloques.
+
+% -----------------------------------------------------
+\subsection{Estructura de PL/pgSQL}
+% -----------------------------------------------------
+
+\begin{lstlisting}
+CREATE [OR REPLACE] FUNCTION nombreFuncion ([parametro [, ...]])
+RETURNS tipoRetorno AS $$
+[DECLARE
+    declaracion_de_variables_locales]
+BEGIN
+    sentencias_propias_de_la_funcion;
+[EXCEPTION
+    WHEN condicion [OR condicion ...]
+        THEN sentencias_para_manejar_la_excepcion
+    [WHEN condicion [OR condicion ...]
+        THEN sentencias_para_manejar_la_excepcion ...]
+]
+END;
+$$ LANGUAGE 'plpgsql';
+\end{lstlisting}
+
+\paragraph{Delimitadores \$\$.} El cuerpo entero se encierra entre
+delimitadores ``dólar comillado''. PostgreSQL acepta
+\texttt{\$nombre\$ \dots\ \$nombre\$} si se necesita anidar.
+
+% -----------------------------------------------------
+\subsection{Parámetros y variables}
+% -----------------------------------------------------
+
+\begin{lstlisting}
+-- Parametros: [IN | OUT | INOUT] [nombre] tipo
+CREATE FUNCTION sum_n_product(int, y int, OUT sum int, OUT prod int) AS $$
+BEGIN
+    sum  := $1 + y;     -- $1 referencia al primer parametro sin nombre.
+    prod := $1 * y;
+END;
+$$ LANGUAGE plpgsql;
+\end{lstlisting}
+
+Si una función se declara con uno o más \texttt{OUT}, PostgreSQL la
+trata como devolviendo una fila con esas columnas. Se invoca con un
+\texttt{SELECT}.
+
+\paragraph{Declaración de variables.}
+
+\begin{lstlisting}
+nombre [CONSTANT] tipo [NOT NULL] [{ DEFAULT | := } expresion];
+
+-- Alias de un parametro posicional.
+nombreAlias ALIAS FOR $n;
+
+-- Asignacion.
+nombreVariable := expresion;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Bloques anidados y control de flujo}
+% -----------------------------------------------------
+
+Igual que en MySQL, los bloques se delimitan con
+\texttt{BEGIN \dots\ END} y pueden anidarse, cada uno con sus
+propios manejadores de excepciones.
+
+PL/pgSQL provee:
+
+\begin{itemize}
+    \item \texttt{LOOP \dots\ END LOOP;}
+    \item \texttt{CASE}
+    \item \texttt{EXIT} (sale del bloque/ciclo)
+    \item \texttt{IF \dots\ THEN \dots\ ELSE \dots\ END IF;}
+    \item \texttt{FOR}
+    \item \texttt{WHILE}
+\end{itemize}
+
+\paragraph{Sentencia \texttt{FOR} numérica.}
+
+\begin{lstlisting}
+FOR variable IN inicio..fin LOOP
+    cuerpo_del_for;
+END LOOP;
+
+-- Iteracion en sentido inverso.
+FOR variable IN REVERSE fin..inicio LOOP
+    cuerpo_del_for;
+END LOOP;
+
+-- Ejemplo: factorial.
+FOR inc IN 1..10 LOOP
+    factorial := factorial * inc;
+END LOOP;
+\end{lstlisting}
+
+\paragraph{Sentencia \texttt{FOR} sobre filas (cursor implícito).}
+PL/pgSQL permite recorrer un \texttt{SELECT} sin abrir el cursor
+manualmente:
+
+\begin{lstlisting}
+DECLARE
+    registro RECORD;          -- registro generico
+BEGIN
+    FOR registro IN SELECT * FROM productos LOOP
+        stock := registro.stock_actual + 100;
+    END LOOP;
+END;
+\end{lstlisting}
+
+\begin{nota}
+\textbf{Tipos de registro.} Se puede declarar un registro
+\texttt{RECORD} (genérico) o ligado al esquema de una tabla con
+\texttt{persona\%ROWTYPE}. Esto último brinda chequeo de tipos por
+columna.
+\end{nota}
+
+% -----------------------------------------------------
+\subsection{Cursores explícitos}
+% -----------------------------------------------------
+
+\begin{lstlisting}
+DECLARE nombre CURSOR FOR sentenciaSelect;
+
+-- Operaciones: FETCH, CLOSE, MOVE.
+-- La variable booleana FOUND indica si la ultima operacion devolvio fila.
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Excepciones}
+% -----------------------------------------------------
+
+PostgreSQL permite lanzar excepciones del usuario:
+
+\begin{lstlisting}
+RAISE EXCEPTION 'el mensaje %', valor;
+\end{lstlisting}
+
+Y capturarlas con bloques \texttt{EXCEPTION \dots\ WHEN}:
+
+\begin{lstlisting}
+BEGIN
+    -- ...
+EXCEPTION
+    WHEN condicion [OR condicion ...] THEN
+        sentencias_para_manejar_la_excepcion;
+END;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Invocación}
+% -----------------------------------------------------
+
+A diferencia de MySQL, en PostgreSQL las funciones se invocan con
+\texttt{SELECT}:
+
+\begin{lstlisting}
+SELECT nombreProcedimiento([parametroActual [, ...]]);
+SELECT procedimiento(2);
+\end{lstlisting}
+
+Si la función tiene parámetros \texttt{OUT}, conviene
+\texttt{SELECT * FROM funcion(\dots)} para ver todas las columnas
+devueltas.
+
+% =====================================================
+\section{Procedimientos y funciones en Oracle (PL/SQL)}
+% =====================================================
+
+Oracle ofrece un lenguaje muy potente, \textbf{PL/SQL}, con
+estructura semejante a la de PL/pgSQL.
+
+% -----------------------------------------------------
+\subsection{Sintaxis general}
+% -----------------------------------------------------
+
+\paragraph{Procedimiento.}
+
+\begin{lstlisting}
+CREATE [OR REPLACE] PROCEDURE nombreProc ([parametro [, ...]])
+AS
+    [DECLARE]
+        declaraciones
+BEGIN
+    programa;
+[EXCEPTION
+    tratamiento_de_excepciones]
+END;
+/
+\end{lstlisting}
+
+\paragraph{Función.}
+
+\begin{lstlisting}
+CREATE [OR REPLACE] FUNCTION nombreFunc ([parametro [, ...]])
+RETURN tipo
+AS
+    [declaraciones]
+BEGIN
+    programa;
+[EXCEPTION
+    tratamiento_de_excepciones]
+END;
+/
+\end{lstlisting}
+
+\paragraph{Parámetros.}
+
+\begin{lstlisting}
+nombreParametro [IN | OUT | IN OUT] tipo [DEFAULT expr]
+\end{lstlisting}
+
+\paragraph{Variables.}
+
+\begin{lstlisting}
+nombreVariable tipo [NOT NULL] [:= valor | DEFAULT valor];
+nombreVariable := expresion;       -- asignacion
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Excepciones en Oracle}
+% -----------------------------------------------------
+
+Oracle permite lanzar excepciones del usuario con
+\texttt{RAISE\_APPLICATION\_ERROR}, cuyo número debe estar en el
+rango $[-20999, -20000]$:
+
+\begin{lstlisting}
+RAISE_APPLICATION_ERROR(Error_number INT, texto TEXT);
+
+-- Ejemplo.
+RAISE_APPLICATION_ERROR(-20011, 'prueba de excepcion');
+\end{lstlisting}
+
+También se puede declarar una excepción con nombre y lanzarla con
+\texttt{RAISE}.
+
+\paragraph{Captura de excepciones.} Con \texttt{WHEN OTHERS THEN \dots},
+y las funciones \texttt{SQLCODE} y \texttt{SQLERRM} para obtener el
+código y el mensaje:
+
+\begin{lstlisting}
+DECLARE
+    err_num NUMBER;
+    err_msg VARCHAR2(255);
+    result  NUMBER;
+BEGIN
+    RAISE_APPLICATION_ERROR(-20011, 'prueba de excepcion');
+EXCEPTION
+    WHEN OTHERS THEN
+        err_num := SQLCODE;
+        err_msg := SQLERRM;
+        DBMS_OUTPUT.PUT_LINE('Error: ' || TO_CHAR(err_num));
+        DBMS_OUTPUT.PUT_LINE(err_msg);
+END;
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Cursores en PL/SQL}
+% -----------------------------------------------------
+
+La sintaxis de \texttt{DECLARE / OPEN / FETCH / CLOSE} es la misma
+que en MySQL. La diferencia interesante son los \emph{atributos} que
+expone cada cursor:
+
+\begin{itemize}
+    \item \texttt{\%FOUND}: \texttt{true} si el último \texttt{FETCH}
+    devolvió fila.
+    \item \texttt{\%NOTFOUND}: complemento del anterior.
+    \item \texttt{\%ISOPEN}: \texttt{true} si el cursor está abierto.
+    \item \texttt{\%ROWCOUNT}: cantidad de filas leídas hasta el
+    momento.
+\end{itemize}
+
+\paragraph{Ejemplo de manejo de cursor.}
+
+\begin{lstlisting}
+CREATE OR REPLACE PROCEDURE listar IS
+    CURSOR cproductos IS SELECT nProd, precio FROM productos;
+    regProducto cproductos%ROWTYPE;
+BEGIN
+    OPEN cproductos;
+    FETCH cproductos INTO regProducto;
+    WHILE cproductos%FOUND LOOP
+        DBMS_OUTPUT.PUT_LINE(regProducto.precio);
+        FETCH cproductos INTO regProducto;
+    END LOOP;
+    CLOSE cproductos;
+END;
+/
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Invocación en Oracle}
+% -----------------------------------------------------
+
+Se invoca dentro de un bloque anónimo:
+
+\begin{lstlisting}
+[DECLARE
+    declaraciones]
+BEGIN
+    nombreProc([parametroActual [, ...]]);
+END;
+/
+
+-- Ejemplo.
+DECLARE
+    nombre_parametro INT;
+BEGIN
+    nombre_parametro := 3;
+    pruebaProc(3, nombre_parametro);
+END;
+/
+\end{lstlisting}
+
+% =====================================================
+\section{Triggers (disparadores)}
+% =====================================================
+
+Un \textbf{trigger} es un procedimiento que el motor ejecuta
+\emph{automáticamente} cuando se cumple una \emph{condición de
+disparo}: una operación DML (\texttt{INSERT}, \texttt{UPDATE} o
+\texttt{DELETE}) sobre una tabla específica. Se utilizan
+principalmente para:
+
+\begin{itemize}
+    \item generar información de auditoría;
+    \item mantener consistencia entre tablas;
+    \item normalizar datos antes de su persistencia (mayúsculas,
+    \texttt{TRIM}, etc.);
+    \item completar campos derivados (autonumerado en motores que no
+    lo traen nativo).
+\end{itemize}
+
+Para diseñar un trigger hay que definir:
+
+\begin{enumerate}
+    \item la \textbf{condición de disparo} (qué evento, sobre qué
+    tabla, antes o después);
+    \item las \textbf{acciones} a ejecutar cuando se dispara.
+\end{enumerate}
+
+% -----------------------------------------------------
+\subsection{Variables contextuales \texttt{NEW} y \texttt{OLD}}
+% -----------------------------------------------------
+
+Dentro del cuerpo del trigger, dos variables especiales dan acceso a
+la fila afectada:
+
+\begin{itemize}
+    \item \texttt{NEW}: contiene los \emph{nuevos} valores. Disponible
+    en \texttt{INSERT} y \texttt{UPDATE}.
+    \item \texttt{OLD}: contiene los \emph{viejos} valores. Disponible
+    en \texttt{UPDATE} y \texttt{DELETE}.
+\end{itemize}
+
+En PostgreSQL y MySQL se referencian directamente como
+\texttt{NEW.col}/\texttt{OLD.col}; en Oracle el cuerpo PL/SQL las
+referencia con dos puntos: \texttt{:NEW.col}/\texttt{:OLD.col}.
+
+% -----------------------------------------------------
+\subsection{Estándar y dialectos por motor}
+% -----------------------------------------------------
+
+\begin{itemize}
+    \item SQL-92 \emph{no} incluye triggers; cada motor tenía su
+    propia forma.
+    \item SQL:1999 incorporó la sintaxis estándar, pero los motores
+    siguen ofreciendo extensiones.
+    \item El \emph{lenguaje} del cuerpo del trigger es el mismo que
+    para procedimientos almacenados (SQL/PSM, PL/pgSQL o PL/SQL).
+\end{itemize}
+
+% -----------------------------------------------------
+\subsection{Triggers en MySQL}
+% -----------------------------------------------------
+
+Disponibles desde MySQL 5.0.2.
+
+\begin{lstlisting}
+CREATE TRIGGER nombre_trigger momento_disparo evento_disparo
+    ON nombre_tabla
+    FOR EACH ROW
+    sentencia_trigger;
+
+-- momento_disparo: BEFORE | AFTER
+-- evento_disparo:  INSERT | UPDATE | DELETE
+\end{lstlisting}
+
+\paragraph{Ejemplo: auditar bajas en \texttt{articulos}.}
+
+\begin{lstlisting}
+delimiter $$
+CREATE TRIGGER trigger_baja_articulos
+AFTER DELETE ON articulos
+FOR EACH ROW
+BEGIN
+    INSERT INTO articulos_bajas
+    VALUES (OLD.nart, OLD.descr, OLD.precio, CURRENT_USER(), NOW());
+END;
+$$
+delimiter ;
+\end{lstlisting}
+
+\begin{nota}
+\textbf{\texttt{CURRENT\_USER()} vs usuario de aplicación.} En MySQL,
+\texttt{CURRENT\_USER()} devuelve el usuario con el que se estableció
+la conexión (típicamente uno técnico de la aplicación, como
+\texttt{webapp@\%}). Casi siempre la auditoría busca otra cosa: el
+usuario \emph{de la aplicación cliente} (la persona logueada). Eso
+debe registrarse en una variable de sesión:
+\end{nota}
+
+\begin{lstlisting}
+-- Setear desde el cliente al iniciar la sesion.
+SET @id_usuario = 4;
+
+-- El trigger lee la variable de sesion.
+INSERT INTO AUDITORIA VALUES (0, @id_usuario, NEW.fecha);
+\end{lstlisting}
+
+% -----------------------------------------------------
+\subsection{Triggers en PostgreSQL}
+% -----------------------------------------------------
+
+PostgreSQL desacopla \emph{trigger} y \emph{función}: primero se crea
+una función que devuelve \texttt{TRIGGER}, después se asocia esa
+función a una tabla con \texttt{CREATE TRIGGER}.
+
+\begin{lstlisting}
+CREATE TRIGGER nombre {BEFORE | AFTER}
+    {evento [OR ...]}
+    ON tabla [FOR [EACH] {ROW | STATEMENT}]
+    EXECUTE PROCEDURE nombreFunc(argumentos);
+\end{lstlisting}
+
+\paragraph{Ejemplo de auditoría.}
+
+\begin{lstlisting}
+-- 1) Funcion que se ejecutara al disparar el trigger.
+CREATE FUNCTION funcion_auditoria() RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO auditoria
+    VALUES (1, OLD.nart, NOW(), OLD.cant - NEW.cant);
+    RETURN NEW;
+END;
+$$ LANGUAGE 'plpgsql';
+
+-- 2) Asociar el trigger a la tabla.
+CREATE TRIGGER trigger_auditoria
+AFTER UPDATE ON articulos
+FOR EACH ROW
+EXECUTE PROCEDURE funcion_auditoria();
+\end{lstlisting}
+
+\paragraph{Diferencia \texttt{ROW} vs \texttt{STATEMENT}.} Con
+\texttt{FOR EACH ROW} la función se ejecuta una vez por cada fila
+afectada; con \texttt{FOR EACH STATEMENT}, una sola vez por sentencia.
+
+% -----------------------------------------------------
+\subsection{Triggers en Oracle}
+% -----------------------------------------------------
+
+\begin{lstlisting}
+CREATE [OR REPLACE] TRIGGER [esquema.]nombre
+{BEFORE | AFTER | INSTEAD OF}
+{ dml_event_clause
+| ddl_event [OR ddl_eventN]...
+| database_event [OR database_eventN]...}
+ON {tabla | view | [esquema.]SCHEMA | DATABASE}
+[FOR EACH ROW]
+[WHEN (condicion)]
+{pl/sql_block | call_procedure_statement};
+\end{lstlisting}
+
+\paragraph{Ejemplo (equivalente al de MySQL).}
+
+\begin{lstlisting}
+CREATE TRIGGER trigger_baja_articulos
+AFTER DELETE ON articulos
+FOR EACH ROW
+BEGIN
+    INSERT INTO articulos_bajas
+    VALUES (:OLD.nart, :OLD.descr, :OLD.precio, USER, SYSDATE);
+END;
+/
+\end{lstlisting}
+
+\paragraph{\texttt{INSTEAD OF}.} Es propio de Oracle/PostgreSQL y se
+asocia a \emph{vistas}: en lugar de ejecutar la operación sobre la
+vista (que muchas veces no es actualizable), el trigger redirige la
+acción a las tablas base.
+
+\paragraph{\texttt{WHEN (condicion)}.} Permite filtrar el disparo:
+sólo se ejecuta el cuerpo si la condición sobre \texttt{NEW}/\texttt{OLD}
+es verdadera. Es lo que permite, por ejemplo, autonumerar sólo cuando
+el cliente no provee un valor explícito:
+
+\begin{lstlisting}
+CREATE OR REPLACE TRIGGER bi_parquimetro_autonumerado
+BEFORE INSERT ON parquimetro
+FOR EACH ROW
+WHEN (NEW.id_parquimetro IS NULL)
+BEGIN
+    SELECT seq_parquimetro.NEXTVAL
+      INTO :NEW.id_parquimetro
+      FROM dual;
+END;
+/
+\end{lstlisting}
+
+% =====================================================
+\section{Reglas de reescritura en PostgreSQL}
+% =====================================================
+
+PostgreSQL incluye un mecanismo extra, distinto de los triggers,
+llamado \textbf{sistema de reglas de reescritura}
+(\texttt{CREATE RULE}). En lugar de ejecutar código adicional cuando
+ocurre un evento, \emph{modifica el query} antes de ejecutarlo.
+
+\paragraph{Las vistas son reglas.} En PostgreSQL,
+\texttt{CREATE VIEW vista AS SELECT * FROM tabla;} es equivalente a:
+
+\begin{lstlisting}
+CREATE TABLE vista (lista_de_columnas);
+CREATE RULE ReescribeVista AS ON SELECT TO vista
+    DO INSTEAD SELECT * FROM tabla;
+\end{lstlisting}
+
+es decir, una tabla vacía más una regla que reescribe los
+\texttt{SELECT} a esa tabla.
+
+\paragraph{Reglas de actualización.} Permiten interceptar
+\texttt{INSERT}, \texttt{UPDATE} o \texttt{DELETE}:
+
+\begin{lstlisting}
+CREATE [OR REPLACE] RULE nombre
+    AS ON evento TO tabla
+    [WHERE condicion]
+    DO [ALSO | INSTEAD]
+    {NOTHING | comando | (comando; comando ...)};
+\end{lstlisting}
+
+\paragraph{Ejemplo.} Auditoría de cambios de precio:
+
+\begin{lstlisting}
+CREATE RULE log_precio_productos
+AS ON UPDATE TO productos
+WHERE NEW.precio <> OLD.precio
+DO ALSO
+INSERT INTO productos_log
+VALUES (NEW.codigo, NEW.nombre, OLD.precio, NEW.precio,
+        current_user, current_timestamp);
+\end{lstlisting}
+
+% =====================================================
+\section{Triggers vs procedimientos}
+% =====================================================
+
+\begin{center}
+\begin{tabular}{@{}p{4cm} p{4.5cm} p{5.5cm}@{}}
+\toprule
+& \textbf{Procedimiento almacenado} & \textbf{Trigger} \\
+\midrule
+Quién lo dispara &
+El cliente, explícitamente, con \texttt{CALL}/\texttt{SELECT} &
+El motor, \emph{automáticamente}, ante un evento DML \\
+\addlinespace
+Parámetros & Sí (\texttt{IN}, \texttt{OUT}, \texttt{INOUT}) &
+No: el ``input'' es la fila afectada (\texttt{NEW}/\texttt{OLD}) \\
+\addlinespace
+Frecuencia & Una vez por invocación &
+Por fila o por sentencia, según la configuración \\
+\addlinespace
+Uso típico & Lógica de negocio invocable, encapsulamiento &
+Auditoría, integridad cruzada, normalización, autonumerado \\
+\addlinespace
+Aborta operación & Sólo levantando excepción &
+Sí, levantando excepción en \texttt{BEFORE} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================
+\section{Conexión con el Práctico 3}
+% =====================================================
+
+\begin{itemize}
+    \item \textbf{Ejercicio 1 (MySQL/PostgreSQL)}: agrega
+    \texttt{cantidad\_maxima\_items} a \texttt{factura} y la valida
+    con triggers \texttt{BEFORE INSERT}/\texttt{UPDATE}, levantando
+    excepción con \texttt{SIGNAL SQLSTATE '45000'} (MySQL) o
+    \texttt{RAISE EXCEPTION} (PostgreSQL) si se supera el máximo.
+    \item \textbf{Ejercicio 2 (PostgreSQL)}: función con parámetros
+    \texttt{IN}/\texttt{OUT} que recorre las cotizaciones con un
+    \texttt{FOR \dots\ LOOP} (sin usar \texttt{MAX}). Aplica
+    directamente la \emph{sentencia FOR sobre filas} del teórico.
+    \item \textbf{Ejercicio 3 (Oracle)}: dos procedimientos
+    almacenados con \texttt{IN}/\texttt{OUT}, validación con
+    \texttt{RAISE\_APPLICATION\_ERROR}, manejo de
+    \texttt{NO\_DATA\_FOUND} y salida con
+    \texttt{DBMS\_OUTPUT.PUT\_LINE}.
+    \item \textbf{Ejercicio 4 (MySQL)}: procedimiento creado por
+    \texttt{vendedor2} con \texttt{SQL SECURITY INVOKER}; conecta
+    DCL del Práctico 2 con SQL/PSM del Práctico 3.
+    \item \textbf{Ejercicio 5}: triggers de tres tipos:
+    \emph{normalización} (\texttt{BEFORE INSERT}, \texttt{UPPER}),
+    \emph{auditoría} (\texttt{AFTER UPDATE}, leyendo el usuario de
+    aplicación de una variable de sesión) y \emph{autonumerado}
+    (\texttt{AUTO\_INCREMENT} en MySQL, \texttt{SEQUENCE + TRIGGER
+    BEFORE INSERT WHEN (NEW.id IS NULL)} en Oracle).
+\end{itemize}
+
+% =====================================================
+\section{Ideas clave para repasar antes del parcial}
+% =====================================================
+
+\begin{enumerate}
+    \item \textbf{Procedimiento vs trigger.} El primero se invoca; el
+    segundo se dispara automáticamente.
+    \item \textbf{Cada motor, su lenguaje}: SQL/PSM (MySQL), PL/pgSQL
+    (PostgreSQL), PL/SQL (Oracle).
+    \item \textbf{Bloque \texttt{BEGIN \dots\ END}} es la unidad básica
+    de ejecución y de scope; puede anidarse.
+    \item \textbf{\texttt{DECLARE} primero, código después}: las
+    variables, condiciones, \emph{handlers} y cursores se declaran al
+    inicio de cada bloque.
+    \item \textbf{Parámetros}: \texttt{IN} (entrada), \texttt{OUT}
+    (salida), \texttt{INOUT} (ambos). En PostgreSQL, una función con
+    \texttt{OUT} se invoca con \texttt{SELECT * FROM funcion(\dots)}.
+    \item \textbf{Excepciones} (cómo lanzarlas):
+    \texttt{SIGNAL SQLSTATE '45000'} (MySQL), \texttt{RAISE EXCEPTION
+    '\dots'} (PostgreSQL), \texttt{RAISE\_APPLICATION\_ERROR(-20\dots,
+    '\dots')} (Oracle).
+    \item \textbf{Excepciones} (cómo capturarlas): \emph{handlers}
+    \texttt{CONTINUE}/\texttt{EXIT}/\texttt{UNDO} en MySQL, bloques
+    \texttt{EXCEPTION WHEN \dots\ THEN} en PostgreSQL/Oracle.
+    \item \textbf{Cursores}: ciclo \texttt{DECLARE} $\to$
+    \texttt{OPEN} $\to$ \texttt{FETCH (en bucle)} $\to$
+    \texttt{CLOSE}. La condición \texttt{NOT FOUND} (\texttt{SQLSTATE
+    '02000'}) o el atributo \texttt{\%NOTFOUND} indican fin de
+    iteración.
+    \item \textbf{Cursor implícito en PL/pgSQL}: el bucle
+    \texttt{FOR registro IN SELECT \dots\ LOOP \dots\ END LOOP}
+    ahorra el \texttt{OPEN}/\texttt{FETCH}/\texttt{CLOSE} explícitos.
+    \item \textbf{Triggers} se diseñan con dos elementos: condición
+    de disparo (BEFORE/AFTER + INSERT/UPDATE/DELETE) y cuerpo.
+    Dentro: \texttt{NEW}/\texttt{OLD} (con \texttt{:} en Oracle).
+    \item \textbf{Auditar el usuario de aplicación} requiere
+    variables de sesión, no \texttt{CURRENT\_USER()}.
+    \item \textbf{PostgreSQL separa función y trigger}: la función
+    \texttt{RETURNS TRIGGER}; el trigger se asocia con
+    \texttt{CREATE TRIGGER \dots\ EXECUTE PROCEDURE func()}.
+    \item \textbf{\texttt{INSTEAD OF}} es propio de vistas (Oracle y
+    PostgreSQL): redirige una operación que se ejecuta sobre una
+    vista hacia las tablas base.
+    \item \textbf{Reglas de reescritura} son una herramienta extra de
+    PostgreSQL: \emph{modifican el query}, no agregan código de
+    ejecución.
+    \item \textbf{\texttt{ALTER PROCEDURE/FUNCTION}} cambia
+    \emph{características} (\texttt{SQL SECURITY}, \texttt{COMMENT},
+    etc.); para cambiar el cuerpo se usa \texttt{CREATE OR REPLACE}.
+\end{enumerate}
+
+% =====================================================
+\section*{Resumen final}
+% =====================================================
+\addcontentsline{toc}{section}{Resumen final}
+
+Los procedimientos almacenados y los triggers son las herramientas con
+las que la lógica de negocio se acomoda dentro del motor de base de
+datos. Compartiendo el mismo lenguaje del lado servidor en cada motor
+--- SQL/PSM, PL/pgSQL o PL/SQL --- permiten escribir código con
+parámetros, variables, control de flujo, cursores y excepciones,
+ejecutado lo más cerca posible de los datos.
+
+Si quedan firmes los cinco bloques --- \emph{procedimiento vs
+función}, \emph{parámetros \texttt{IN}/\texttt{OUT}}, \emph{control
+de flujo y cursores}, \emph{manejo de excepciones} y \emph{triggers
+con \texttt{NEW}/\texttt{OLD}} ---, el Práctico 3 se traduce
+directamente: cada inciso es una combinación de uno o dos de esos
+bloques sobre las bases de datos heredadas de los prácticos
+anteriores. La gracia no está sólo en escribir el código, sino en
+elegir bien cuándo usar trigger, cuándo procedimiento y cuándo
+ninguna de las dos (porque alcanza con un \texttt{CHECK} o una
+\texttt{FOREIGN KEY}).
+
+\end{document}
