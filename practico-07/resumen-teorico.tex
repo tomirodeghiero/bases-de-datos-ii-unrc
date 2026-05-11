@@ -1,0 +1,680 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla,es-noshorthands]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas y diagramas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,shapes.geometric}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Resumen --- XML y JSON}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinestyle{plain}{
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt
+}
+\lstset{style=plain}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+\title{Resumen Teórico --- XML y JSON\\[4pt]
+       \large Bases de Datos II --- Práctico N.\textsuperscript{o} 7}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Resumen Teórico}}\\[6pt]
+    {\large XML y JSON --- Bases documentales y MongoDB\\[2pt]
+    Práctico N.\textsuperscript{o} 7}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Síntesis del Teórico 9 (XML y JSON), complementada con la
+    parte práctica de MongoDB del Práctico 7.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Datos semiestructurados: idea general}
+% =====================================================
+
+Las bases de datos clásicas exigen que cada fila tenga \emph{exactamente}
+los mismos campos que el esquema de su tabla. Esto es ideal cuando los
+datos están bien definidos, pero genera problemas cuando hay que
+intercambiar datos entre aplicaciones diferentes ---cada una con su
+propia idea de qué guardar--- o cuando los datos son intrínsecamente
+\emph{irregulares} (no todos los productos tienen un ISBN, no todos los
+clientes tienen un segundo teléfono, etc.).
+
+Los formatos \textbf{semiestructurados} resuelven este desbalance. Un
+documento semiestructurado lleva ``etiquetas'' o ``claves'' que
+identifican cada pedazo del dato, y la estructura puede variar de un
+documento a otro. Los dos formatos que dominan hoy son:
+
+\begin{itemize}
+    \item \textbf{XML}: surgió como lenguaje estándar para intercambio
+    de datos entre sistemas. Es verboso pero rico en herramientas
+    (esquemas, transformaciones, consultas).
+    \item \textbf{JSON}: nació como serialización de objetos JavaScript
+    y se volvió el formato dominante por su simpleza. Es la base de las
+    APIs REST y de las bases de datos NoSQL documentales (MongoDB).
+\end{itemize}
+
+% =====================================================
+\section{XML}
+% =====================================================
+
+\textbf{XML} (\emph{eXtensible Markup Language}) fue definido por la
+World Wide Web Consortium (W3C) como lenguaje genérico para representar
+datos estructurados con marcas.
+
+\paragraph{Idea.} Un documento XML está hecho de elementos delimitados
+por marcas de apertura y cierre, anidables entre sí:
+
+\begin{lstlisting}
+<supermercado>
+    <articulo>
+        <nro_articulo>10</nro_articulo>
+        <descripcion>Harina</descripcion>
+        <precio>20.8</precio>
+    </articulo>
+    <proveedor>
+        <nro_proveedor>202</nro_proveedor>
+        <nombre>Molinos Canuelas</nombre>
+    </proveedor>
+</supermercado>
+\end{lstlisting}
+
+Las marcas \emph{describen} el contenido: el dato es ``relativamente
+autodocumentado''.
+
+\paragraph{Motivación.}
+\begin{itemize}
+    \item Comunicación de datos entre aplicaciones (bancos,
+    procesamiento de órdenes entre empresas).
+    \item Base del protocolo SOAP en Web Services.
+    \item Texto plano con headers que indican el significado: fácil de
+    debuggear y de pasar entre lenguajes.
+\end{itemize}
+
+\paragraph{Comparación con datos relacionales.}
+\begin{itemize}
+    \item \emph{Más ineficiente en almacenamiento}: las marcas se repiten
+    en cada elemento, mientras que en una tabla la estructura aparece
+    una sola vez en el encabezado.
+    \item \emph{Mejor para intercambio}: cada documento es
+    autodescriptivo y la estructura puede ser flexible.
+\end{itemize}
+
+\subsection{Esquemas: DTD y XML Schema}
+
+Un documento XML \emph{no} requiere asociarse a un esquema, pero los
+esquemas son críticos para el intercambio: permiten validar que el
+documento recibido es el esperado. Existen dos mecanismos:
+
+\paragraph{DTD (\emph{Document Type Definition}).} La forma original,
+hoy obsoleta. Define qué elementos puede haber, qué atributos, qué
+subelementos y con qué cardinalidad. No restringe tipos de dato: todo
+es \emph{string}.
+
+\begin{lstlisting}
+<!ELEMENT element (subelements-specification) >
+<!ATTLIST element (attributes) >
+\end{lstlisting}
+
+\paragraph{XML Schema.} El estándar actual. Soporta:
+\begin{itemize}
+    \item tipos de dato (int, string, date, decimal, etc.);
+    \item restricciones de mínimos y máximos;
+    \item tipos definidos por el usuario;
+    \item claves (\texttt{xs:key}) y claves foráneas (\texttt{xs:keyref})
+    con \texttt{xs:selector} y \texttt{xs:field};
+    \item espacios de nombres (\emph{namespaces}).
+\end{itemize}
+
+Está escrito en sintaxis XML (a diferencia de DTD), por lo que se valida
+con las mismas herramientas que cualquier otro XML.
+
+Ejemplo de restricción de clave en XML Schema:
+
+\begin{lstlisting}
+<xs:key name="claveCuenta">
+    <xs:selector xpath="/banco/cuenta"/>
+    <xs:field    xpath="nro_cuenta"/>
+</xs:key>
+
+<xs:keyref name="fkCuenta" refer="claveCuenta">
+    <xs:selector xpath="/banco/titular"/>
+    <xs:field    xpath="numero_cuenta"/>
+</xs:keyref>
+\end{lstlisting}
+
+\subsection{Consultas y transformaciones}
+
+Hay tres lenguajes estándares para trabajar con XML:
+
+\begin{itemize}
+    \item \textbf{XPath}: lenguaje de expresiones tipo ``path'' para
+    navegar el árbol XML. Es la base sobre la que se construyen los
+    otros dos.
+    \item \textbf{XQuery}: lenguaje de consulta general para XML
+    (análogo a SQL para relacional).
+    \item \textbf{XSLT}: lenguaje para transformar XML en otro XML, o
+    en HTML.
+\end{itemize}
+
+\subsubsection*{XPath: navegación}
+
+Expresiones tipo \texttt{/banco/cuenta[saldo>400]/nro\_cuenta}: bajan
+por el árbol seleccionando nodos que cumplen el predicado.
+
+\subsubsection*{XQuery: FLWOR}
+
+XQuery usa la estructura \textbf{FLWOR}: \emph{For, Let, Where, Order by,
+Return}. La equivalencia con SQL es:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+XQuery & SQL \\
+\midrule
+\texttt{for}      & \texttt{from}     \\
+\texttt{where}    & \texttt{where}    \\
+\texttt{order by} & \texttt{order by} \\
+\texttt{return}   & \texttt{select}   \\
+\texttt{let}      & (sin equivalencia: variables temporales) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Ejemplo: obtener los números de cuenta con saldo $>$ 400:
+
+\begin{lstlisting}
+for   $x in /banco-2/cuenta
+let   $nroCuenta := $x/@numero-cuenta
+where $x/saldo > 400
+return <numero-cuenta>{ $nroCuenta }</numero-cuenta>
+\end{lstlisting}
+
+\subsubsection*{XSLT: transformaciones}
+
+XSLT (\emph{XML Stylesheet Language Transformations}) usa
+\emph{templates} para transformar nodos XML. Cada template hace
+\emph{match} sobre un patrón XPath y produce salida con
+\texttt{xsl:value-of}:
+
+\begin{lstlisting}
+<xsl:template match="/banco-2/cliente">
+    <xsl:value-of select="nombre_cliente"/>
+</xsl:template>
+\end{lstlisting}
+
+Su uso típico es generar HTML a partir de XML, pero sirve para cualquier
+conversión XML $\rightarrow$ XML o XML $\rightarrow$ texto.
+
+% =====================================================
+\section{JSON}
+% =====================================================
+
+\textbf{JSON} (\emph{JavaScript Object Notation}) es un formato liviano
+de intercambio de datos. Su éxito está en tres atributos: es muy simple
+de interpretar, es independiente del lenguaje y usa convenciones
+familiares para programadores de C, Java, JavaScript, Python, etc.
+
+\paragraph{Por qué desplaza a XML.}
+\begin{itemize}
+    \item Menos verboso (no hay marcas de cierre repetidas).
+    \item Mapeo directo a estructuras de datos nativas (objetos,
+    arreglos).
+    \item Es el formato natural de APIs REST.
+    \item Es la base de almacenamiento de las bases NoSQL documentales,
+    como MongoDB.
+\end{itemize}
+
+\subsection{Estructura de un documento JSON}
+
+JSON está construido sobre dos estructuras:
+
+\begin{itemize}
+    \item \textbf{Objeto}: conjunto desordenado de pares
+    \texttt{nombre/valor}. Sintaxis: \texttt{\{ "clave": valor, ... \}}.
+    \item \textbf{Arreglo}: lista ordenada de valores. Sintaxis:
+    \texttt{[ v1, v2, ... ]}.
+\end{itemize}
+
+\paragraph{Tipos de valor.} Un valor puede ser:
+\begin{itemize}
+    \item un \emph{string} entre comillas dobles;
+    \item un \emph{número} (entero o decimal);
+    \item \texttt{true}, \texttt{false} o \texttt{null};
+    \item otro objeto;
+    \item un arreglo.
+\end{itemize}
+
+Las estructuras se pueden anidar libremente.
+
+\paragraph{Ejemplo.}
+
+\begin{lstlisting}
+{
+  "nombre":   "Carlos",
+  "apellido": "Perez",
+  "edad":     45,
+  "direccion": {
+    "calle":       "San Martin",
+    "ciudad":      "Rio Cuarto",
+    "codigoPostal": 5800
+  },
+  "telefonos": [
+    { "tipo": "fijo",  "numero": "358-45458412" },
+    { "tipo": "movil", "numero": "351-468213744" }
+  ]
+}
+\end{lstlisting}
+
+\subsection{JSON como modelo de datos}
+
+Lo interesante para una base de datos es que JSON soporta directamente:
+
+\begin{itemize}
+    \item \textbf{Composición} (objetos embebidos, como
+    \texttt{direccion} dentro de la persona): equivale al concepto E/R
+    de \emph{atributo compuesto}.
+    \item \textbf{Multivalor} (arreglos como \texttt{telefonos}):
+    equivale al concepto E/R de \emph{atributo multivaluado}.
+    \item \textbf{Heterogeneidad}: dos documentos de la misma colección
+    pueden tener distintos campos.
+\end{itemize}
+
+Es exactamente lo contrario a la primera forma normal del modelo
+relacional. En vez de \emph{romper} estos atributos en tablas separadas,
+los modelos documentales los mantienen \emph{juntos} con el resto del
+dato.
+
+% =====================================================
+\section{Consultas sobre JSON}
+% =====================================================
+
+A diferencia de XML, no hay todavía un estándar único de consulta sobre
+JSON. La especificación XQuery 3.1 de W3C extiende XQuery a JSON, pero
+en la práctica conviven varios lenguajes específicos:
+
+\begin{itemize}
+    \item \textbf{JsonPath}: el más usado, inspirado en XPath. Está
+    implementado para muchos lenguajes (la cátedra usa Jayway JsonPath
+    para Java).
+    \item \textbf{JSONiq}: basado en XQuery.
+    \item \textbf{JSON Query}: otro lenguaje tipo XPath.
+    \item Cada lenguaje de programación tiene además su propio DSL
+    (LINQ to JSON en .NET, \texttt{json\_path} en Postgres, etc.).
+\end{itemize}
+
+\subsection{JsonPath en detalle}
+
+JsonPath se basa en una colección de \textbf{operadores} y
+\textbf{funciones}:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Operador & Significado \\
+\midrule
+\texttt{\$}                & Raíz del documento. \\
+\texttt{@}                 & Nodo actual (dentro de un predicado). \\
+\texttt{*}                 & Comodín. \\
+\texttt{..}                & Recorrido en profundidad. \\
+\texttt{.<nombre>}         & Acceso a hijo. \\
+\texttt{['<n1>','<n2>']}   & Hijos anotados entre corchetes. \\
+\texttt{[<i>,<j>]}         & Uno o más índices de arreglo. \\
+\texttt{[start:end]}       & Rango de índices. \\
+\texttt{[?(<expr>)]}       & Filtro: la expresión devuelve booleano. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Funciones de agregación.} \texttt{min()}, \texttt{max()},
+\texttt{avg()}, \texttt{length()}.
+
+\paragraph{Operadores de filtro.} \texttt{==}, \texttt{!=}, \texttt{<},
+\texttt{<=}, \texttt{>}, \texttt{>=}, \texttt{=$\sim$} (regex),
+\texttt{in}, \texttt{nin}, \texttt{subsetof}, \texttt{anyof},
+\texttt{noneof}, \texttt{size}, \texttt{empty}.
+
+\subsection{Ejemplos sobre la tienda de libros}
+
+Sobre el JSON clásico de \texttt{store.book[]} con \texttt{bicycle} y
+\texttt{expensive} en la raíz:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+JsonPath & Resultado \\
+\midrule
+\texttt{\$.store.book[*].author}                   & Autores de todos los libros. \\
+\texttt{\$..author}                                & Todos los \texttt{author} del documento. \\
+\texttt{\$.store.*}                                & Todo lo que la tienda almacena. \\
+\texttt{\$.store..price}                           & Precios de todo lo almacenado. \\
+\texttt{\$..book[2]}                               & El tercer libro. \\
+\texttt{\$..book[-2]}                              & El penúltimo libro. \\
+\texttt{\$..book[0,1]}                             & Los primeros dos libros. \\
+\texttt{\$..book[?(@.isbn)]}                       & Libros que tienen ISBN. \\
+\texttt{\$.store.book[?(@.price < 10)]}            & Libros con precio menor a 10. \\
+\texttt{\$..book[?(@.price <= \$['expensive'])]}   & Libros considerados baratos. \\
+\texttt{\$..book[?(@.author =$\sim$ /.*REES/i)]}   & Equivalente al \texttt{LIKE} de SQL. \\
+\texttt{\$..book.length()}                         & Cantidad de libros. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Uso desde Java (Jayway)}
+
+\begin{lstlisting}
+import com.jayway.jsonpath.JsonPath;
+import java.io.File;
+
+File   jsonFile = new File("/tmp/json.txt");
+String jsonExp  = "$.store.book[?(@.price > 10)]";
+
+System.out.println(JsonPath.read(jsonFile, jsonExp));
+\end{lstlisting}
+
+% =====================================================
+\section{Bases de datos documentales: MongoDB}
+% =====================================================
+
+Las bases de datos NoSQL orientadas a documentos almacenan JSON (o una
+variante binaria como BSON, en el caso de MongoDB) como unidad de dato.
+\textbf{MongoDB} es el motor documental más popular y el que usa el
+Práctico 7.
+
+\subsection{Conceptos básicos}
+
+\begin{itemize}
+    \item \textbf{Base de datos}: contenedor lógico de colecciones.
+    \item \textbf{Colección}: grupo de documentos relacionados
+    (equivalente a una tabla, pero sin esquema rígido).
+    \item \textbf{Documento}: un objeto JSON/BSON con un \texttt{\_id}
+    único. Es la unidad mínima de almacenamiento.
+    \item \textbf{Esquema}: opcional. Se puede validar con
+    \texttt{\$jsonSchema} al crear la colección.
+\end{itemize}
+
+\subsection{Operaciones CRUD básicas}
+
+\begin{lstlisting}
+// Insert
+db.usuarios.insertOne({ nick: "moises", edad: 45, ... });
+db.usuarios.insertMany([{...},{...}]);
+
+// Read (find)
+db.usuarios.find({ edad: { $gt: 40 } });
+db.usuarios.find(
+  { edad: { $gt: 40 } },             // filtro
+  { _id: 0, nick: 1, edad: 1 }       // proyeccion
+);
+
+// Update
+db.usuarios.updateOne(
+  { nick: "moises" },
+  { $set: { edad: 46 } }
+);
+
+// Upsert (update o insert si no existe)
+db.usuarios.updateOne(
+  { nick: "elias" },
+  { $set: { ... } },
+  { upsert: true }
+);
+
+// Delete
+db.usuarios.deleteOne({ nick: "moises" });
+\end{lstlisting}
+
+\subsection{Operadores de consulta}
+
+Los \emph{filtros} se construyen con operadores tipo \texttt{\$op}:
+
+\begin{itemize}
+    \item Comparación: \texttt{\$eq}, \texttt{\$ne}, \texttt{\$gt},
+    \texttt{\$gte}, \texttt{\$lt}, \texttt{\$lte}, \texttt{\$in},
+    \texttt{\$nin}.
+    \item Lógicos: \texttt{\$and}, \texttt{\$or}, \texttt{\$not},
+    \texttt{\$nor}.
+    \item Existencia: \texttt{\$exists}.
+    \item Sobre arreglos: \texttt{\$all}, \texttt{\$size},
+    \texttt{\$elemMatch}.
+    \item Texto: expresiones regulares en literales o con \texttt{\$regex}.
+\end{itemize}
+
+\paragraph{Proyección.} El segundo parámetro de \texttt{find} dice qué
+campos incluir (\texttt{1}) o excluir (\texttt{0}). El \texttt{\_id}
+viene por defecto incluido y suele excluirse explícitamente.
+
+\subsection{Aggregation framework}
+
+Cuando \texttt{find} no alcanza, MongoDB ofrece un \emph{pipeline} de
+etapas. Cada etapa toma los documentos de la anterior y los transforma:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Etapa & Función \\
+\midrule
+\texttt{\$match}     & Filtra documentos (como \texttt{find}). \\
+\texttt{\$project}   & Selecciona y calcula campos. \\
+\texttt{\$group}     & Agrupa por una clave (similar a \texttt{GROUP BY}). \\
+\texttt{\$sort}      & Ordena. \\
+\texttt{\$limit} / \texttt{\$skip} & Paginación. \\
+\texttt{\$unwind}    & Desempaqueta un arreglo en un documento por elemento. \\
+\texttt{\$lookup}    & Join lógico con otra colección. \\
+\texttt{\$addFields} & Agrega o transforma campos. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Ejemplo: \texttt{\$lookup} para hacer un join lógico.}
+
+\begin{lstlisting}
+db.noticias.aggregate([
+  {
+    $lookup: {
+      from:         "usuarios",
+      localField:   "autor_nick",
+      foreignField: "nick",
+      as:           "autor"
+    }
+  },
+  { $unwind: "$autor" },
+  { $match: { "autor.nyape": /gonzalez$/i } },
+  { $sort:  { fecha: 1 } }
+]);
+\end{lstlisting}
+
+\subsection{Decisiones de modelado documental}
+
+\paragraph{Embedding vs Referencing.} La decisión clave al modelar en
+MongoDB:
+
+\begin{itemize}
+    \item \textbf{Embedding}: anidar un documento dentro de otro. Ideal
+    cuando el documento embebido es \emph{parte} del padre y la
+    consulta dominante los pide juntos. Ejemplo: dirección dentro del
+    usuario.
+    \item \textbf{Referencing}: guardar una referencia (clave) a otra
+    colección. Ideal cuando las entidades tienen ciclos de vida
+    independientes o cuando el embebido crecería sin tope. Ejemplo:
+    comentarios de una noticia (pueden ser muchísimos y se agregan a lo
+    largo del tiempo).
+\end{itemize}
+
+\paragraph{Sin foreign keys.} MongoDB \emph{no} valida referencias entre
+colecciones. La consistencia referencial queda del lado de la
+aplicación o de los validadores manuales.
+
+\paragraph{Índices.} Crear índices únicos sobre las claves de negocio
+(\texttt{nick}, \texttt{codigo}) e índices simples sobre los campos por
+los que se filtra o se hace \texttt{\$lookup} es indispensable para que
+las consultas sean eficientes a escala.
+
+\subsection{Validación con \texttt{\$jsonSchema}}
+
+Aunque MongoDB no exige esquema, se le puede dar uno al crear la
+colección:
+
+\begin{lstlisting}
+db.createCollection("usuarios", {
+  validator: { $jsonSchema: {
+    bsonType: "object",
+    required: ["nick","nyape","edad","direccion","telefonos"],
+    properties: {
+      nick:      { bsonType: "string", minLength: 1 },
+      edad:      { bsonType: "int",    minimum:   0 },
+      direccion: { bsonType: "object",
+                   required: ["calle","altura"],
+                   properties: {
+                     calle:  { bsonType: "string", minLength: 1 },
+                     altura: { bsonType: "int",    minimum:   0 }
+                   }},
+      telefonos: { bsonType: "array",  minItems: 1,
+                   items: { bsonType: "string", minLength: 1 }}
+    }
+  }}
+});
+\end{lstlisting}
+
+Da garantías de tipos sin sacrificar la flexibilidad documental.
+
+% =====================================================
+\section{XML vs JSON: comparación}
+% =====================================================
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Dimensión & XML & JSON \\
+\midrule
+Verbosidad         & Alta (etiquetas duplicadas)     & Baja \\
+Tipos de dato      & Todo string en DTD; tipados en XML Schema & Nativos: number, bool, null \\
+Esquemas           & DTD / XML Schema (maduros)      & JSON Schema (más reciente) \\
+Consultas          & XPath, XQuery (estándares)      & JsonPath, JSONiq (no estandarizados) \\
+Transformaciones   & XSLT                             & Ad-hoc (mapeo en código) \\
+Uso típico         & Documentos textuales, SOAP       & APIs REST, NoSQL, frontend \\
+Bases que lo usan  & XML nativos, Oracle XML DB       & MongoDB, CouchDB, Postgres JSONB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Cuándo conviene cada uno.} XML sigue siendo preferible cuando
+hay que validar con un esquema estricto, transformar a varios formatos
+de salida o comunicarse con sistemas legados. JSON es la elección por
+defecto para APIs nuevas, almacenamiento documental y cuando el
+consumo es código JavaScript del lado del cliente.
+
+% =====================================================
+\section{Cómo se conecta con el Práctico 7}
+% =====================================================
+
+\begin{itemize}
+    \item \textbf{Ejercicio 1}: aplicación directa de JsonPath sobre un
+    documento JSON (operadores de navegación y filtros).
+    \item \textbf{Ejercicio 2}: generación programática de JSON desde
+    Java con Gson, partiendo de datos relacionales.
+    \item \textbf{Ejercicio 3}: modelado documental con embedding
+    (\texttt{direccion}, \texttt{telefonos}) y referencing
+    (\texttt{noticias}, \texttt{comentarios}).
+    \item \textbf{Ejercicio 4}: operaciones de inserción con
+    \texttt{upsert} para idempotencia.
+    \item \textbf{Ejercicio 5}: consultas \texttt{find} con proyección y
+    \texttt{aggregate} con \texttt{\$lookup} para join lógico entre
+    colecciones.
+\end{itemize}
+
+% =====================================================
+\section{Conclusión}
+% =====================================================
+
+Las ideas centrales a retener:
+
+\begin{itemize}
+    \item XML y JSON son los formatos de datos semiestructurados que
+    dominan el intercambio entre aplicaciones. JSON está reemplazando a
+    XML por su simpleza y por su buena integración con APIs REST y
+    bases NoSQL.
+    \item XML tiene un ecosistema maduro de esquemas (DTD, XML Schema)
+    y consultas (XPath, XQuery, XSLT). JSON ofrece equivalentes más
+    livianos: JSON Schema y JsonPath.
+    \item Las bases documentales (MongoDB) usan JSON como modelo de
+    datos. El modelado deja de pivotear sobre la primera forma normal y
+    pasa a depender de decisiones de \emph{embedding} vs
+    \emph{referencing} según el uso esperado.
+    \item Las consultas en MongoDB se hacen con \texttt{find}
+    (filtro + proyección) o con el \emph{aggregation framework}
+    (pipeline de etapas), que cubre desde joins lógicos con
+    \texttt{\$lookup} hasta agregaciones grupales.
+\end{itemize}
+
+\end{document}

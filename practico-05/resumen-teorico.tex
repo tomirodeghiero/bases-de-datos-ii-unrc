@@ -1,0 +1,809 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas y diagramas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,trees,calc}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Resumen Teórico --- Proc. y Opt. de Consultas}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={NUMERIC,VARCHAR,DECIMAL,DATE,TIMESTAMP,
+        BIGINT,VARCHAR2,NUMBER,SCHEMA,DATABASE,
+        WITH,FROM,TO,ON,AS,AND,OR,IS,NOT,NULL,
+        INSERT,UPDATE,DELETE,SELECT,EXPLAIN,ANALYZE,BUFFERS,
+        NATURAL,JOIN,CROSS,INNER,OUTER,LEFT,RIGHT,FULL,GROUP,BY,ORDER,
+        SET,RESET,CREATE,INDEX,IF,EXISTS,VIEW,MATERIALIZED,REFERENCES},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+
+\lstdefinestyle{sqlstyle}{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+\lstset{style=sqlstyle}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+% --- Comandos cortos para álgebra relacional ---
+\newcommand{\sel}[1]{\sigma_{#1}}
+\newcommand{\proy}[1]{\Pi_{#1}}
+\newcommand{\jn}{\bowtie}
+
+\title{Resumen Teórico --- Procesamiento y Optimización de Consultas\\[4pt]
+       \large Bases de Datos II --- Práctico N.\textsuperscript{o} 5}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Resumen Teórico}}\\[6pt]
+    {\large Procesamiento y Optimización de Consultas\\[2pt]
+    Práctico N.\textsuperscript{o} 5}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Síntesis de los Teóricos 6 (Procesamiento de Consultas) y 7
+    (Optimización de Consultas).}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Visión general}
+% =====================================================
+
+Cuando un motor de base de datos recibe una consulta SQL no la ejecuta
+literalmente: la procesa en \textbf{tres etapas}, cada una con responsabilidades
+bien delimitadas:
+
+\begin{enumerate}
+    \item \textbf{Parsing y traducción.} Se verifica la sintaxis y que las
+    relaciones y columnas referenciadas existan. Luego el SQL se traduce a
+    una expresión del \emph{álgebra relacional}. Si la consulta usa
+    \emph{vistas}, la traducción reemplaza la vista por su definición.
+    \item \textbf{Optimización.} A partir de la expresión inicial se generan
+    \emph{expresiones equivalentes} (mismo resultado, distinto orden o forma)
+    y, por cada una, varios \emph{planes de ejecución} (qué algoritmo concreto
+    se usa para cada operador). El optimizador estima costos y elige el plan
+    más barato.
+    \item \textbf{Evaluación.} El motor toma el plan elegido y lo ejecuta
+    contra los datos en disco, devolviendo el resultado.
+\end{enumerate}
+
+\begin{center}
+\begin{tikzpicture}[node distance=8mm, every node/.style={font=\footnotesize}]
+    \node[draw,rounded corners] (q) {\strut Consulta SQL};
+    \node[draw,rounded corners,right=10mm of q] (p) {\strut Parser y traductor};
+    \node[draw,rounded corners,right=10mm of p] (e) {\strut Expresión $\sigma,\Pi,\bowtie$};
+    \node[draw,rounded corners,below=8mm of e] (o) {\strut Optimizador};
+    \node[draw,rounded corners,below=8mm of p] (m) {\strut Motor de ejecución};
+    \node[draw,rounded corners,left=10mm of m] (r) {\strut Resultado};
+    \node[draw,cylinder,shape border rotate=90,aspect=0.25,right=10mm of o] (s) {Estadísticas};
+
+    \draw[-{Latex}] (q) -- (p);
+    \draw[-{Latex}] (p) -- (e);
+    \draw[-{Latex}] (e) -- (o);
+    \draw[-{Latex}] (s) -- (o);
+    \draw[-{Latex}] (o) -- node[right,font=\tiny]{plan de ejec.} (m);
+    \draw[-{Latex}] (m) -- (r);
+\end{tikzpicture}
+\end{center}
+
+El \emph{punto importante} es que la diferencia de costo entre dos planes
+equivalentes puede ser enorme (varios órdenes de magnitud). Por eso la
+optimización no es un lujo: es lo que hace que SQL sea usable a escala.
+
+% =====================================================
+\section{Costos: cómo se mide la eficiencia}
+% =====================================================
+
+El costo de una consulta es básicamente el tiempo de respuesta. En la práctica
+intervienen muchos factores (CPU, RAM, red, disco), pero el Teórico~6
+simplifica: \textbf{el costo dominante es el acceso a disco}, y se calcula
+contando dos cosas:
+
+\begin{itemize}
+    \item número de \emph{bloques transferidos} (lectura/escritura), con
+    tiempo unitario $t_T$;
+    \item número de \emph{búsquedas} (\emph{seeks}, posicionamientos del
+    cabezal o cambio de partición), con tiempo unitario $t_b$.
+\end{itemize}
+
+Si una operación transfiere $b$ bloques y hace $s$ búsquedas, su costo
+estimado es
+
+\[
+\text{Costo} \;=\; b \cdot t_T \;+\; s \cdot t_b .
+\]
+
+\paragraph{Valores de referencia (Teórico 6).}
+$t_b = 4$~ms, $t_T = 0{,}1$~ms, bloque de 4~KB, velocidad de transferencia
+40~MB/s. Son valores ``académicos''; en SSD modernos $t_b$ es mucho menor
+($t_b \approx 0$ en NVMe), pero el modelo sigue siendo correcto: \emph{las
+búsquedas son caras frente a las transferencias contiguas}.
+
+\paragraph{Variables del catálogo que aparecen en los costos.}
+\begin{itemize}
+    \item $n_r$: cantidad de tuplas de la relación $r$.
+    \item $b_r$: cantidad de bloques que contienen tuplas de $r$.
+    \item $t_r$: tamaño promedio de una tupla.
+    \item $f_r$: \emph{factor de bloque}, tuplas por bloque ($b_r = \lceil n_r/f_r\rceil$).
+    \item $V(A,r)$: cantidad de valores distintos del atributo $A$ en $r$.
+    \item $h_i$: altura del índice (B+tree).
+\end{itemize}
+
+Estas variables son las mismas que cualquier motor real mantiene en su
+catálogo (en PostgreSQL: \texttt{pg\_class.reltuples}, \texttt{relpages},
+\texttt{pg\_stats.n\_distinct}, etc.).
+
+% =====================================================
+\section{Algoritmos para la operación de selección}
+% =====================================================
+
+La selección $\sel{\theta}(r)$ es el operador más estudiado porque interviene
+en casi todas las consultas. El Teórico~6 lista once algoritmos identificados
+como A1\,\ldots\,A11; el optimizador elige uno según haya o no haya índices
+y según la forma de $\theta$ (igualdad, rango, conjunción, disyunción).
+
+\subsection{Selecciones simples (un solo predicado)}
+
+\subsubsection*{A1: búsqueda lineal}
+
+Lee bloque por bloque, descarta los que no cumplen el predicado. Es el
+``algoritmo universal'': siempre se puede aplicar.
+
+\[
+\text{Costo}_{A1} = b_r \cdot t_T + t_b.
+\]
+
+Si la condición es de \emph{igualdad por clave} (a lo sumo una tupla
+cumple), la búsqueda se corta en cuanto aparece: en promedio
+$(b_r/2)\,t_T + t_b$.
+
+\paragraph{Por qué importa.} A1 es el plan de referencia. Cualquier otro
+plan vale la pena sólo si es más barato que A1. Por eso, cuando la
+selectividad es muy alta, los motores eligen Seq Scan aunque haya índice
+disponible: leer todo en orden es más barato que saltar de bloque en
+bloque.
+
+\subsubsection*{A2: búsqueda binaria}
+
+Aplicable si el archivo está \emph{ordenado} por el atributo y la condición
+es de igualdad: localiza la primera tupla con costo
+$\lceil \log_2 b_r \rceil \cdot (t_T + t_b)$ y luego transfiere los bloques
+contiguos.
+
+\subsubsection*{A3, A4, A5: igualdad con índice}
+
+\begin{itemize}
+    \item \textbf{A3} --- igualdad sobre \emph{índice de clave primaria o
+    único}. A lo sumo una tupla. Costo $(h_i + 1)(t_T + t_b)$.
+    \item \textbf{A4} --- igualdad sobre \emph{índice primario no único}
+    (atributo no clave, pero el archivo está ordenado por él). Las tuplas
+    que cumplen están en bloques contiguos:
+    $h_i\,(t_T + t_b) + t_b + b \cdot t_T$, con $b$ = bloques que
+    contienen tuplas que cumplen.
+    \item \textbf{A5} --- igualdad sobre \emph{índice secundario}. Si el
+    atributo no es único pueden recuperarse varias tuplas, una I/O por
+    tupla en el peor caso: $(h_i + n)\,(t_T + t_b)$.
+\end{itemize}
+
+\paragraph{Intuición.} A3 es el caso ideal (devuelve una sola tupla y baja
+el árbol del índice una sola vez). A5 paga por cada tupla devuelta porque
+puede estar en un bloque distinto: si la selectividad es muy baja, A5 puede
+volverse peor que A1.
+
+\subsubsection*{A6 y A7: rango con índice}
+
+\begin{itemize}
+    \item \textbf{A6} --- rango sobre \emph{índice primario}. Para $A\ge v$
+    se busca la primera tupla con el índice y se sigue secuencialmente.
+    Para $A\le v$ se arranca desde el inicio del archivo y se para en la
+    primera tupla que viole la condición; el índice no agrega valor en este
+    último caso.
+    \item \textbf{A7} --- rango sobre \emph{índice secundario}. Se recorren
+    las hojas del índice para conseguir los punteros y, por cada puntero,
+    se hace una I/O.
+\end{itemize}
+
+\begin{nota}
+\textbf{Cuándo conviene un índice secundario sobre uno primario.} El índice
+primario garantiza que las tuplas devueltas vienen en bloques contiguos. El
+secundario, no: cada tupla puede estar en un bloque distinto y obliga a
+\emph{tantas} I/O como tuplas, lo que rápidamente se vuelve más caro que
+leer el archivo entero (A1). Por eso, para rangos amplios, los motores
+suelen preferir Seq Scan al \emph{Index Scan} con índice secundario.
+\end{nota}
+
+\subsection{Selecciones complejas (conjunción y disyunción)}
+
+\subsubsection*{A8: conjunción usando un solo índice}
+
+Para $\sel{\theta_1 \wedge \theta_2 \wedge \cdots \wedge \theta_n}(r)$:
+
+\begin{enumerate}
+    \item Elegir la condición $\theta_i$ que dé el plan más barato según
+    A1--A7.
+    \item Recuperar las tuplas que cumplen $\theta_i$.
+    \item Testear el resto de las condiciones en memoria.
+\end{enumerate}
+
+Es la estrategia ``elegir la condición más restrictiva''.
+
+\subsubsection*{A9: índice multiclave}
+
+Si existe un índice compuesto que cubre exactamente la combinación de
+predicados, se usa directamente. Ejemplo: índice \texttt{(a,b)} para
+$\sel{a=v_1\wedge b=v_2}(r)$.
+
+\subsubsection*{A10: intersección de identificadores}
+
+Para conjunciones donde \emph{cada} condición tiene un índice utilizable:
+
+\begin{enumerate}
+    \item Obtener el conjunto de punteros $P_i$ que cumple $\theta_i$ usando
+    su índice (lógica A2--A7).
+    \item Calcular $P_1 \cap P_2 \cap \cdots \cap P_n$.
+    \item Recuperar sólo las tuplas referenciadas por la intersección.
+\end{enumerate}
+
+Es el algoritmo subyacente a los \emph{Bitmap Index Scan} de PostgreSQL.
+
+\subsubsection*{A11: unión de identificadores (disyunción)}
+
+Para $\sel{\theta_1 \vee \theta_2 \vee \cdots \vee \theta_n}(r)$ con un
+índice para cada $\theta_i$:
+
+\begin{enumerate}
+    \item Obtener $P_i$ con el índice de $\theta_i$.
+    \item Calcular $P_1 \cup P_2 \cup \cdots \cup P_n$ (sin duplicados).
+    \item Recuperar las tuplas referenciadas.
+\end{enumerate}
+
+Si alguna condición no tiene índice, no aplica y hay que caer a A1.
+
+\paragraph{Resumen de la familia A1--A11.}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Algoritmo & Aplicabilidad & Idea \\
+\midrule
+A1  & Siempre                            & Búsqueda lineal \\
+A2  & Archivo ordenado, igualdad         & Búsqueda binaria \\
+A3  & Igualdad, índice único             & Una sola tupla \\
+A4  & Igualdad, índice primario no único & Tuplas contiguas \\
+A5  & Igualdad, índice secundario        & I/O por tupla \\
+A6  & Rango, índice primario             & Recorrido secuencial \\
+A7  & Rango, índice secundario           & Recorrer hojas + I/O \\
+A8  & Conjunción + un índice             & Filtrar el resto en RAM \\
+A9  & Conjunción + índice multiclave     & Un solo acceso \\
+A10 & Conjunción + varios índices        & Intersección de RIDs \\
+A11 & Disyunción + índices               & Unión de RIDs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================
+\section{Ordenamiento}
+% =====================================================
+
+\paragraph{Por qué importa.} Muchas operaciones (group by, distinct, merge
+join, order by) requieren entrada ordenada. Cómo se ordena depende de si
+la relación entra en memoria:
+
+\begin{itemize}
+    \item Si la relación cabe en RAM: cualquier algoritmo clásico
+    (\emph{quicksort}, \emph{heapsort}, \ldots).
+    \item Si no cabe: \textbf{External Sort-Merge}.
+    \item Si ya existe un índice sobre el atributo a ordenar: alcanza con
+    recorrerlo, una I/O por tupla. Conviene sólo si la cantidad de tuplas
+    es chica (de lo contrario es más barato ordenar de cero).
+\end{itemize}
+
+\paragraph{External Sort-Merge.} Con $M$ bloques de memoria disponibles:
+
+\begin{enumerate}
+    \item \textbf{Fase de creación de corridas}: leer $M$ bloques a la vez,
+    ordenarlos en memoria y escribir cada bloque ordenado como una
+    \emph{corrida} $S_i$ a disco. Quedan $N = \lceil b_r / M\rceil$ corridas
+    ordenadas pero no entre sí.
+    \item \textbf{Fase de merge $N$-way}: si $N < M$, se mezclan las $N$
+    corridas con $N$ buffers de entrada y 1 de salida. Si $N \ge M$, se
+    hacen varias pasadas, mezclando $M-1$ corridas en cada una y reduciendo
+    el número total por ese factor.
+\end{enumerate}
+
+% =====================================================
+\section{Algoritmos para la operación de join}
+% =====================================================
+
+El join $r \jn_\theta s$ es la operación con más algoritmos a elegir
+porque es la más cara y la que más se beneficia de la elección correcta.
+
+\subsection{Nested-loop join}
+
+\begin{center}
+\begin{tabular}{l}
+\textbf{for each} tupla $t_r$ en $r$ \textbf{do} \\
+\quad \textbf{for each} tupla $t_s$ en $s$ \textbf{do} \\
+\quad\quad si $\theta(t_r,t_s)$ es verdadero, emitir $t_r \cdot t_s$
+\end{tabular}
+\end{center}
+
+Es el más simple y se aplica a cualquier condición $\theta$ (no sólo
+igualdad). Costo del peor caso:
+
+\[
+n_r \cdot b_s + b_r \text{ bloques transferidos} \;+\; n_r + b_r \text{ búsquedas}.
+\]
+
+\paragraph{Ejemplo del teórico.} Con $n_{cli}=10\,000$, $b_{cli}=400$,
+$n_{fac}=5\,000$, $b_{fac}=100$:
+\begin{itemize}
+    \item \texttt{factura} como externa: $5000\cdot 400 + 100 = 2{,}000{,}100$
+    bloques transferidos.
+    \item \texttt{cliente} como externa: $10000\cdot 100 + 400 = 1{,}000{,}400$.
+\end{itemize}
+
+Conclusión: poner como \emph{externa} la relación que minimice el producto
+$n_{ext} \cdot b_{int}$; idealmente, la más chica como interna entera en
+memoria.
+
+\paragraph{Block nested-loop.} Variante que carga \emph{bloques} de $r$
+en lugar de tuplas individuales y compara contra todas las de $s$. Reduce
+muchísimo el número de búsquedas. Si la relación más chica entra en memoria
+el costo cae a $b_r + b_s$ con 2 búsquedas.
+
+\subsection{Indexed nested-loop join}
+
+Si existe un índice sobre el atributo del join en la relación interna $s$,
+por cada tupla de $r$ se busca directamente en el índice. Útil para joins
+selectivos o cuando $s$ es grande pero el predicado de igualdad recupera
+pocas tuplas.
+
+\subsection{Merge-join}
+
+Aplicable a \emph{equi-joins} y joins naturales. Funciona así:
+
+\begin{enumerate}
+    \item Ordenar ambas relaciones por los atributos del join (si todavía no
+    lo están).
+    \item Recorrer las dos en paralelo como un \emph{merge}: avanzar la
+    relación cuyo valor sea menor; cuando coinciden, emitir el cruce de
+    tuplas con ese valor.
+\end{enumerate}
+
+Cada relación se recorre \emph{una vez}. Si las relaciones ya están
+ordenadas (por ejemplo, por índice clusterizado o por una operación previa
+que dejó el orden), Merge-Join es muy barato.
+
+\subsection{Hash-join}
+
+Aplicable a joins de igualdad y naturales:
+
+\begin{enumerate}
+    \item Elegir una función hash $h$ sobre los atributos del join.
+    \item Particionar $r$ en buckets $r_0, r_1, \ldots, r_n$ según $h$ y
+    análogamente $s$ en $s_0, \ldots, s_n$. La clave: tuplas de $r_i$ sólo
+    pueden cruzarse con tuplas de $s_i$ (porque tienen el mismo hash).
+    \item Por cada par $(r_i, s_i)$, hacer el join en memoria (típicamente
+    \emph{nested loop} sobre la partición chica con tabla hash sobre la
+    otra).
+\end{enumerate}
+
+Es el algoritmo que más usan los motores modernos cuando ninguna relación
+viene ordenada. Es el caso por defecto cuando se hace
+\texttt{NATURAL JOIN} sin índices ni \texttt{ORDER BY} (como pasa en el
+Ejercicio~5.e).
+
+\paragraph{Comparación práctica.}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Algoritmo & Condiciones soportadas & Cuándo conviene \\
+\midrule
+Nested-loop          & Cualquiera             & Una relación muy chica o como fallback \\
+Nested-loop (bloques)& Cualquiera             & Relación chica cabe en RAM \\
+Indexed nested-loop  & Cualquiera + índice    & Join muy selectivo en la interna \\
+Merge-join           & Igualdad / natural     & Entradas ya ordenadas \\
+Hash-join            & Igualdad / natural     & Cualquier tamaño sin orden previo \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================
+\section{Evaluación de expresiones: materialización vs pipelining}
+% =====================================================
+
+Hasta aquí se vieron operadores individuales. Una consulta real es un árbol
+de operadores. Hay dos estrategias para combinarlos:
+
+\paragraph{Materialización.} Cada subexpresión se evalúa por completo y
+su resultado se escribe en disco; el operador siguiente lee desde ese
+resultado intermedio. Es simple pero paga el costo de escribir y leer la
+relación intermedia entera.
+
+\paragraph{Pipelining.} Las tuplas que va produciendo un operador se pasan
+inmediatamente al operador siguiente, sin escribir el intermedio en disco.
+Es como un \emph{stream} de tuplas. Es lo que hacen los motores modernos
+cuando el operador siguiente es \emph{tuple-at-a-time} (selección,
+proyección, nested-loop, hash-join probe).
+
+\paragraph{Quién bloquea el pipeline.} Hay operadores que necesitan ver
+\emph{toda} su entrada antes de producir el primer resultado: por ejemplo,
+sort, hash-join en su fase de \emph{build}, agrupación. Estos son los que
+fuerzan materialización en el árbol.
+
+% =====================================================
+\section{Optimización: generación de expresiones equivalentes}
+% =====================================================
+
+El optimizador toma la expresión inicial (resultado del traductor) y la
+reescribe usando \textbf{reglas de equivalencia}: dos expresiones son
+equivalentes si producen el mismo resultado (en SQL, el mismo \emph{multiset})
+para cualquier instancia de la base de datos.
+
+\subsection{Reglas más usadas (Teórico 7)}
+
+\begin{enumerate}
+    \item \textbf{R1 --- Cascada de selecciones.}
+    $\sel{\theta_1\wedge\theta_2}(E) = \sel{\theta_1}(\sel{\theta_2}(E))$.
+    \item \textbf{R2 --- Conmutatividad de selecciones.}
+    $\sel{\theta_1}(\sel{\theta_2}(E)) = \sel{\theta_2}(\sel{\theta_1}(E))$.
+    \item \textbf{R3 --- Cascada de proyecciones.}
+    Sólo importa la proyección externa: $\proy{L_1}(\proy{L_2}(\cdots(E))) = \proy{L_1}(E)$.
+    \item \textbf{R4 --- Selección sobre producto/theta-join.}
+    $\sel{\theta}(E_1\times E_2) = E_1 \jn_\theta E_2$.
+    \item \textbf{R5 --- Conmutatividad de join.}
+    $E_1 \jn E_2 = E_2 \jn E_1$.
+    \item \textbf{R6 --- Asociatividad de join.}
+    $(E_1 \jn E_2) \jn E_3 = E_1 \jn (E_2 \jn E_3)$.
+    \item \textbf{R7 --- Push-down de selección sobre join.}
+    Si $\theta_0$ involucra sólo atributos de $E_1$:
+    $\sel{\theta_0}(E_1\jn E_2) = \sel{\theta_0}(E_1)\jn E_2$.
+    Si $\theta_1$ usa sólo $E_1$ y $\theta_2$ sólo $E_2$:
+    $\sel{\theta_1\wedge\theta_2}(E_1\jn E_2) = \sel{\theta_1}(E_1)\jn \sel{\theta_2}(E_2)$.
+    \item \textbf{R8 --- Push-down de proyección sobre join.}
+    $\proy{L_1\cup L_2}(E_1\jn_\theta E_2)$ se distribuye, conservando en cada
+    operando los atributos que pertenezcan a $L_1\cup L_2$ o aparezcan en
+    $\theta$.
+    \item \textbf{R9--R12 --- Operaciones de conjuntos.} Unión e intersección
+    son conmutativas y asociativas; la resta no. La selección distribuye
+    sobre unión, intersección y resta.
+\end{enumerate}
+
+\subsection{Intuición y ejemplo}
+
+\paragraph{Por qué empujar selecciones.} Si una selección elimina el 99\%
+de las tuplas, conviene aplicarla antes de cualquier join porque achica el
+tamaño del operando que entra al join. El join trabaja sobre menos tuplas
+y produce menos tuplas.
+
+\paragraph{Ejemplo (Teórico 7).}
+
+\[
+\proy{desc}\!\big(\sel{nombre=\text{``Super Vea''}\,\wedge\,precio\_venta<10}
+(proveedor \jn provee \jn articulo)\big)
+\]
+
+Aplicando R1 (cascada), R7 (push-down) y R5/R6 (reordenar) se llega a:
+
+\[
+\proy{desc}\!\big( \sel{nombre=\text{``Super Vea''}}(proveedor) \jn
+\sel{precio\_venta<10}(provee) \jn articulo \big)
+\]
+
+Ahora cada selección actúa sobre la tabla base más chica y los joins
+trabajan sobre operandos ya reducidos.
+
+\subsection{Orden de joins}
+
+Para tres relaciones, asociatividad da dos planes:
+$(r_1\jn r_2)\jn r_3$ y $r_1\jn(r_2\jn r_3)$. Si $r_2\jn r_3$ resulta
+mucho mayor que $r_1\jn r_2$, el primer plan es preferible (resultado
+intermedio más chico). Para $n$ relaciones hay
+$\dfrac{(2(n-1))!}{(n-1)!}$ órdenes posibles; con $n=10$, casi 18 mil
+millones. Por eso el optimizador usa \textbf{programación dinámica}: calcula
+el mejor plan para cada subconjunto de relaciones una sola vez y los
+combina.
+
+% =====================================================
+\section{Optimización basada en costos vs heurística}
+% =====================================================
+
+Los optimizadores reales combinan dos enfoques:
+
+\paragraph{Optimización basada en costos.} Enumerar (parte de) las
+expresiones equivalentes posibles, estimar el costo de cada plan usando
+las estadísticas del catálogo y elegir el más barato. Es preciso pero caro
+(espacio de planes enorme).
+
+\paragraph{Optimización heurística.} Aplicar reglas que \emph{típicamente}
+mejoran el plan sin estimar costos para cada caso. Las heurísticas
+clásicas son:
+
+\begin{itemize}
+    \item realizar las selecciones tan pronto como sea posible (reducir
+    cantidad de tuplas),
+    \item realizar las proyecciones tan pronto como sea posible (reducir
+    ancho de tupla),
+    \item realizar primero los joins/selecciones más restrictivos (los que
+    den resultados intermedios más chicos).
+\end{itemize}
+
+Los motores reales hacen primero una pasada heurística (push-down,
+reescritura de vistas, eliminación de subqueries) y luego una pasada
+basada en costos sobre el espacio reducido.
+
+\begin{nota}
+\textbf{Atención.} Las heurísticas mejoran ``en general'', no siempre.
+Empujar una selección puede ser contraproducente si la condición es muy
+costosa de evaluar (por ejemplo, una función definida por usuario), o si
+le quita ordenamiento útil al operador siguiente.
+\end{nota}
+
+% =====================================================
+\section{Estadísticas para estimación de costos}
+% =====================================================
+
+Para que la optimización por costos funcione, el optimizador necesita
+\emph{estimar} cuánto cuesta cada plan sin ejecutarlo. Esto se basa
+enteramente en las estadísticas del catálogo.
+
+\subsection{Variables que mantiene el catálogo}
+
+\begin{itemize}
+    \item $n_r$, $b_r$, $t_r$, $f_r$ por relación.
+    \item $V(A,r)$: cantidad de valores distintos del atributo $A$ en $r$.
+    \item $\min(A,r)$ y $\max(A,r)$.
+    \item \textbf{Histogramas} sobre los atributos más consultados,
+    típicamente equi-depth: dividen el rango de valores en buckets con
+    igual cantidad de tuplas. Sirven para estimar selectividad de rangos
+    cuando los valores no están distribuidos uniformemente.
+    \item \textbf{Most Common Values (MCV)}: lista de valores más
+    frecuentes con su frecuencia. Sirven para estimar igualdades cuando
+    el valor pedido aparece en la lista.
+\end{itemize}
+
+\subsection{Estimación de la selección}
+
+\paragraph{Igualdad: $\sel{A=v}(r)$.}
+Si $A$ no es clave: $n_r / V(A,r)$ tuplas (asume distribución uniforme).
+Si $A$ es clave: a lo sumo 1 tupla.
+Si hay MCV y $v \in$ MCV: usar la frecuencia exacta.
+
+\paragraph{Rango: $\sel{A\le v}(r)$.}
+Si no hay histograma: aproximar linealmente entre $\min$ y $\max$:
+\[
+c \;=\; n_r \cdot \frac{v - \min(A,r)}{\max(A,r) - \min(A,r)}.
+\]
+Con histograma equi-depth: sumar bucket por bucket, interpolando el
+bucket final.
+
+\paragraph{Conjunción: $\sel{\theta_1\wedge\cdots\wedge\theta_n}(r)$.}
+Asumiendo \emph{independencia} entre las condiciones:
+\[
+n_r \cdot \frac{s_1 \cdot s_2 \cdots s_n}{n_r^{\,n}},
+\]
+donde $s_i = |\sel{\theta_i}(r)|$. La probabilidad $s_i / n_r$ se llama
+\emph{selectividad} de $\theta_i$.
+
+\paragraph{Disyunción: $\sel{\theta_1\vee\cdots\vee\theta_n}(r)$.}
+Por inclusión--exclusión, asumiendo independencia:
+\[
+n_r \cdot \big(1 - (1 - s_1/n_r)(1 - s_2/n_r)\cdots(1 - s_n/n_r)\big).
+\]
+
+\paragraph{Negación: $\sel{\neg\theta}(r)$.}
+$n_r - |\sel{\theta}(r)|$.
+
+\subsection{Estimación del tamaño de un join}
+
+\paragraph{Producto cartesiano.}
+$|r\times s| = n_r \cdot n_s$.
+
+\paragraph{Si $R \cap S = \varnothing$.}
+$r \jn s$ degenera en $r \times s$: $|r\jn s| = n_r \cdot n_s$.
+
+\paragraph{Si el atributo común es clave en una de las relaciones.}
+Cada tupla de la otra matchea con a lo sumo una:
+$|r \jn s| \le \min(n_r, n_s)$.
+
+\paragraph{Si el atributo común no es clave en ninguna de las dos.}
+Dos estimaciones posibles, dependiendo del lado de la división:
+\[
+\frac{n_r \cdot n_s}{V(A,r)} \quad\text{o}\quad \frac{n_r \cdot n_s}{V(A,s)} .
+\]
+Se toma la \emph{menor} como mejor estimación. Si hay histogramas se aplica
+la misma fórmula por celda.
+
+\subsection{Estimación de otras operaciones}
+
+\begin{itemize}
+    \item Proyección $\proy{A}(r)$: tamaño $\le V(A,r)$ (con eliminación de
+    duplicados).
+    \item Unión $r\cup s$: cota superior $|r| + |s|$.
+    \item Intersección $r\cap s$: cota superior $\min(|r|,|s|)$.
+    \item Diferencia $r - s$: cota superior $|r|$.
+\end{itemize}
+
+% =====================================================
+\section{Técnicas adicionales de optimización}
+% =====================================================
+
+\subsection{Subqueries anidados}
+
+SQL trata conceptualmente a un subquery del \texttt{where} como una función
+que se evalúa una vez por cada tupla del nivel externo (\emph{evaluación
+correlacionada}). En el peor caso esto multiplica el costo por $n_r$.
+
+Los optimizadores intentan reescribir los subqueries como joins:
+
+\begin{lstlisting}
+-- Forma anidada
+SELECT descripcion FROM articulo
+WHERE EXISTS (SELECT 1 FROM provee
+              WHERE provee.nArt = articulo.nArt);
+
+-- Forma equivalente con semijoin / join (mejor plan)
+SELECT DISTINCT a.descripcion
+FROM articulo a JOIN provee p ON p.nArt = a.nArt;
+\end{lstlisting}
+
+La forma con join expone más estructura al optimizador (puede usar hash o
+merge join, índices, etc.).
+
+\subsection{Vistas materializadas}
+
+Una \textbf{vista materializada} es una vista cuyo contenido se calcula y
+se almacena físicamente. Mejora la performance de consultas costosas a
+costa de mantener actualizado el resultado.
+
+\begin{lstlisting}
+CREATE VIEW precioMenor (nArt, precio_venta) AS
+SELECT nArt, min(precio_venta)
+FROM provee
+GROUP BY nArt;
+\end{lstlisting}
+
+\paragraph{Mantenimiento.} Tres estrategias:
+\begin{itemize}
+    \item Recomputar cada cierto tiempo (\emph{batch}, p.ej. cada noche).
+    \item Recomputar al \texttt{commit} (\emph{refresh fast/on commit} en
+    Oracle).
+    \item \textbf{Mantenimiento incremental}: aplicar los cambios sobre la
+    vista a medida que cambian las tablas base, usando \emph{triggers} o
+    logs de cambio. Es la opción más eficiente pero la más compleja.
+\end{itemize}
+
+% =====================================================
+\section{Cómo se conecta con PostgreSQL (Práctico 5)}
+% =====================================================
+
+Todo lo anterior se vuelve operativo en el Ejercicio~5 del práctico:
+
+\begin{itemize}
+    \item \textbf{Catálogo}: \texttt{pg\_class}, \texttt{pg\_attribute},
+    \texttt{pg\_stats} contienen $n_r$, $b_r$, $V(A,r)$, histogramas y MCVs
+    de las tablas \texttt{persona}, \texttt{recurso} y
+    \texttt{seguimiento\_acceso}.
+    \item \textbf{Algoritmos de selección}: el plan inicial sobre
+    \texttt{seguimiento\_acceso} filtrando por \texttt{fecha\_yhora\_entrada}
+    es un \emph{Seq Scan} (A1). Al crear un B+tree sobre la columna y correr
+    \texttt{ANALYZE}, el plan cambia a \emph{Bitmap Index Scan + Heap Scan}
+    (variantes de A5/A7 según la selectividad).
+    \item \textbf{Algoritmos de join}: \texttt{NATURAL JOIN} sin orden
+    previo arranca con \emph{Hash Join}. Creando un índice sobre la columna
+    del join y agregando \texttt{ORDER BY} por la clave de join, el planner
+    cambia a \emph{Merge Join}. Si la decisión no cambia se puede usar
+    \texttt{SET enable\_hashjoin = off} para verificación académica.
+    \item \textbf{Estimación}: el comando \texttt{EXPLAIN (ANALYZE, BUFFERS)}
+    muestra junto al plan el costo \emph{estimado} y el costo \emph{real},
+    permitiendo comparar las estimaciones del optimizador con la ejecución
+    efectiva.
+\end{itemize}
+
+% =====================================================
+\section{Conclusión}
+% =====================================================
+
+Procesar una consulta SQL es, en el fondo, un problema de búsqueda en un
+espacio de planes equivalentes. El motor traduce el SQL a álgebra relacional,
+genera planes con reglas de equivalencia, estima cada uno con las estadísticas
+del catálogo y ejecuta el más barato.
+
+Las ideas centrales para retener son:
+
+\begin{itemize}
+    \item el costo dominante es el acceso a disco (transferencias y
+    búsquedas);
+    \item los algoritmos de selección (A1--A11) y de join se eligen según
+    los índices disponibles y la selectividad;
+    \item las reglas de equivalencia permiten reescribir la expresión sin
+    cambiar su resultado, y suelen mejorar el costo cuando empujan
+    selecciones y proyecciones a las hojas;
+    \item las estadísticas del catálogo son el insumo crítico: sin ellas,
+    el optimizador estima mal y elige peor;
+    \item ningún algoritmo es mejor siempre: la decisión depende de la
+    forma del predicado, del tamaño relativo de las relaciones, de los
+    índices y del estado de la memoria.
+\end{itemize}
+
+\end{document}

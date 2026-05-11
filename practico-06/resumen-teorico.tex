@@ -1,0 +1,797 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla,es-noshorthands]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas y diagramas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,shapes.geometric}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Resumen --- Transacciones y Concurrencia}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={BEGIN,COMMIT,ROLLBACK,START,TRANSACTION,
+        ISOLATION,LEVEL,SESSION,
+        SERIALIZABLE,REPEATABLE,READ,COMMITTED,UNCOMMITTED,
+        NOWAIT,REFERENCES,
+        DEFERRABLE,INITIALLY,DEFERRED,IMMEDIATE,
+        ALTER,CONSTRAINT,CONSTRAINTS},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstdefinestyle{sqlstyle}{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+\lstset{style=sqlstyle}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+\title{Resumen Teórico --- Transacciones y Control de Concurrencia\\[4pt]
+       \large Bases de Datos II --- Práctico N.\textsuperscript{o} 6}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[4pt]
+    {\normalsize Licenciatura en Ciencias de la Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Resumen Teórico}}\\[6pt]
+    {\large Transacciones y Control de Concurrencia\\[2pt]
+    Práctico N.\textsuperscript{o} 6}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año:}    & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Síntesis del Teórico 8: Transacciones y Control de Concurrencia.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Qué es una transacción}
+% =====================================================
+
+Una \textbf{transacción} es una unidad lógica de trabajo de una aplicación
+que accede ---y posiblemente modifica--- elementos de la base de datos.
+Para el motor, una transacción es una secuencia de operaciones
+$r(Q)$ (lectura de un ítem $Q$) y $w(Q)$ (escritura) terminada por una
+operación de finalización: \texttt{COMMIT} si se completó con éxito o
+\texttt{ROLLBACK} si hubo que abortarla.
+
+\paragraph{La regla básica.}
+\emph{La base de datos parte de un estado consistente y, después de
+ejecutar una transacción, debe quedar consistente otra vez.} Durante la
+ejecución la base puede pasar temporalmente por estados inconsistentes
+---por ejemplo, A ya descontó $\$500$ pero B todavía no los recibió---,
+pero esos estados son privados de la transacción: nadie de afuera debería
+verlos.
+
+\paragraph{Ejemplo canónico.} Transferir $\$500$ de la cuenta $A$ a la $B$:
+\[
+\texttt{read}(A);\; A := A - 500;\; \texttt{write}(A);\;
+\texttt{read}(B);\; B := B + 500;\; \texttt{write}(B).
+\]
+Las garantías que se le piden a la transacción son tres:
+
+\begin{itemize}
+    \item Si el sistema falla entre el \texttt{write}(A) y el
+    \texttt{write}(B), el cambio sobre $A$ \emph{no} debe quedar
+    reflejado: la base quedaría inconsistente.
+    \item Ninguna otra transacción debe ver el estado intermedio (con $A$
+    ya descontado y $B$ aún sin acreditar).
+    \item Una vez que la transacción confirma, los $\$500$ están
+    transferidos y eso se mantiene aunque después falle hardware o
+    software.
+\end{itemize}
+
+% =====================================================
+\section{Propiedades ACID}
+% =====================================================
+
+Las propiedades que un motor debe asegurar a cada transacción se
+resumen en el acrónimo \textbf{ACID}:
+
+\begin{itemize}
+    \item \textbf{Atomicidad (A).} O todas las operaciones de la transacción
+    se realizan, o ninguna. No hay ``a medias''. La implementa el manejador
+    de recuperación (logs + rollback).
+    \item \textbf{Consistencia (C).} La ejecución aislada de una transacción
+    \emph{correctamente programada} preserva la consistencia de la base.
+    Esta propiedad cae en la responsabilidad del programador: el motor
+    no sabe qué reglas de negocio son ``consistentes''.
+    \item \textbf{Aislamiento (I).} Aunque varias transacciones se ejecuten
+    concurrentemente, cada una percibe la base como si fuera la única que
+    está actuando sobre ella. Es lo que implementa el control de
+    concurrencia (bloqueos, marcas temporales, MVCC).
+    \item \textbf{Durabilidad (D).} Una vez que una transacción confirmó
+    (\texttt{COMMIT}), sus cambios persisten en disco aun ante fallos
+    posteriores. Lo asegura el sistema de logs + flushes.
+\end{itemize}
+
+% =====================================================
+\section{Estados de una transacción}
+% =====================================================
+
+Durante su vida, una transacción pasa por una secuencia de estados:
+
+\begin{itemize}
+    \item \textbf{Activa}: está ejecutándose normalmente.
+    \item \textbf{Parcialmente comprometida}: ejecutó su última instrucción
+    pero todavía hay trabajo del motor pendiente (escribir log, propagar
+    cambios).
+    \item \textbf{Fallida}: algo impide continuar la ejecución (error en
+    la aplicación, violación de constraint, deadlock, fallo del sistema).
+    \item \textbf{Abortada}: se hizo rollback y la base se restauró al
+    estado previo. Una transacción abortada se puede \emph{reintentar}
+    (si el error fue transitorio, como un deadlock) o \emph{cancelar
+    definitivamente}.
+    \item \textbf{Comprometida}: se completó con éxito; sus efectos son
+    permanentes.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=14mm and 22mm,
+    estado/.style={draw,ellipse,font=\footnotesize,inner sep=3pt}
+]
+    \node[estado] (a)  {Activa};
+    \node[estado] (pc) [above right=of a]   {Parcialm. comprom.};
+    \node[estado] (c)  [right=of pc]        {Comprometida};
+    \node[estado] (f)  [below right=of a]   {Fallida};
+    \node[estado] (ab) [right=of f]         {Abortada};
+
+    \draw[->] (a)  -- (pc);
+    \draw[->] (pc) -- (c);
+    \draw[->] (a)  -- (f);
+    \draw[->] (pc) -- (f);
+    \draw[->] (f)  -- (ab);
+\end{tikzpicture}
+\end{center}
+
+% =====================================================
+\section{Ejecución concurrente y planificaciones}
+% =====================================================
+
+Permitir que muchas transacciones corran al mismo tiempo trae beneficios
+concretos:
+
+\begin{itemize}
+    \item \textbf{Mejor uso del hardware}: mientras una transacción usa
+    CPU, otra puede estar leyendo disco.
+    \item \textbf{Menor tiempo de respuesta promedio}: transacciones
+    cortas no tienen que esperar detrás de transacciones largas.
+\end{itemize}
+
+Pero también introduce problemas: si las transacciones se entrelazan
+sin control, pueden violar la consistencia. Por eso hace falta un
+mecanismo de \textbf{control de concurrencia} que regule cómo se
+intercalan.
+
+\subsection{Planificación (\emph{schedule})}
+
+Una \textbf{planificación} es una secuencia que muestra en qué orden se
+ejecutan las operaciones de un conjunto de transacciones concurrentes.
+Tiene dos requisitos:
+
+\begin{itemize}
+    \item Contiene todas las operaciones de todas las transacciones.
+    \item Preserva el orden interno de cada transacción.
+\end{itemize}
+
+\paragraph{Planificación serial.} Ejecuta cada transacción completa antes
+de empezar la siguiente; no hay intercalado. Son obviamente correctas
+porque cada transacción ve la base entera entre las dos consistentes.
+La idea de la concurrencia es \emph{aproximarse} a una ejecución serial
+en términos de resultado, pero permitiendo intercalado para ganar
+rendimiento.
+
+% =====================================================
+\section{Serializabilidad}
+% =====================================================
+
+Asumimos dos cosas:
+\begin{itemize}
+    \item Cada transacción tomada aisladamente preserva la consistencia
+    de la base.
+    \item Cualquier planificación serial preserva la consistencia.
+\end{itemize}
+
+Una planificación (posiblemente concurrente) es \textbf{secuenciable}
+(o \emph{serializable}) si es \emph{equivalente} a alguna planificación
+serial. Hay dos definiciones de equivalencia:
+
+\begin{itemize}
+    \item Equivalencia \textbf{por conflicto} (la más usada y la del
+    Práctico~6).
+    \item Equivalencia \textbf{por vistas} (más permisiva pero NP-hard).
+\end{itemize}
+
+\subsection{Conflicto entre operaciones}
+
+Dos instrucciones $I_i$ de $T_i$ y $I_j$ de $T_j$ están en conflicto si
+acceden al mismo ítem $Q$ y al menos una de las dos es una escritura:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+$I_i$ & $I_j$ & ¿Conflicto? \\
+\midrule
+$r(Q)$ & $r(Q)$ & No \\
+$r(Q)$ & $w(Q)$ & Sí \\
+$w(Q)$ & $r(Q)$ & Sí \\
+$w(Q)$ & $w(Q)$ & Sí \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Equivalencia por conflicto}
+
+Dos planificaciones son \textbf{equivalentes por conflicto} si una se
+puede transformar en la otra intercambiando \emph{únicamente}
+instrucciones consecutivas que no estén en conflicto. Una planificación
+es \textbf{serializable por conflicto} si es equivalente por conflicto
+a alguna planificación serial.
+
+\subsection{Test del grafo de precedencia}
+
+El test algorítmico de serializabilidad por conflicto construye un grafo
+dirigido:
+
+\begin{itemize}
+    \item Un nodo por cada transacción de la planificación.
+    \item Un arco $T_i \rightarrow T_j$ por cada par de operaciones en
+    conflicto donde la de $T_i$ aparece \emph{antes} que la de $T_j$.
+\end{itemize}
+
+\begin{nota}
+La planificación es serializable por conflicto si y sólo si el grafo
+de precedencia es \textbf{acíclico}. Si hay un ciclo, ningún orden serial
+es compatible con todos los arcos a la vez, y por lo tanto no hay una
+serie equivalente.
+\end{nota}
+
+\paragraph{Ejemplo (Práctico 6, Ejercicio 1).}
+La planificación
+$r_1(X),\, r_2(X),\, w_1(X),\, w_2(X),\ldots$
+genera $T_1 \rightarrow T_2$ (por $r_1(X)$ antes de $w_2(X)$) y
+$T_2 \rightarrow T_1$ (por $r_2(X)$ antes de $w_1(X)$): hay ciclo,
+y la planificación no es serializable.
+
+% =====================================================
+\section{Recuperabilidad}
+% =====================================================
+
+La serializabilidad asegura que el resultado de la concurrencia
+``equivale'' a una ejecución serial. Pero falta otra dimensión: ¿qué pasa
+si una transacción aborta? Para que se pueda hacer \texttt{ROLLBACK}
+correctamente, la planificación tiene que cumplir condiciones extra.
+
+\subsection{Planificación recuperable}
+
+Una planificación es \textbf{recuperable} si, para todo par $T_i, T_j$
+tal que $T_j$ lee un dato que $T_i$ escribió antes, el \texttt{commit}
+de $T_i$ aparece antes que el de $T_j$. Si no se cumple, $T_j$ podría
+haber confirmado basándose en una escritura que después se aborta:
+\emph{no es posible deshacer eso}.
+
+\subsection{Planificación sin cascada}
+
+Una planificación es \textbf{sin cascada} (\emph{cascadeless}) si para
+todo $T_i, T_j$ tal que $T_j$ lee un dato escrito por $T_i$, el
+\texttt{commit} de $T_i$ ocurre antes que la \emph{lectura} de $T_j$.
+
+\begin{itemize}
+    \item Toda planificación sin cascada es recuperable.
+    \item Lo recíproco no se cumple: hay recuperables que sí tienen
+    cascada.
+\end{itemize}
+
+El \textbf{rollback en cascada} (que una falla obligue a abortar muchas
+transacciones encadenadas) es indeseable porque desperdicia trabajo y
+puede crear avalanchas. SQL exige que el sistema garantice tanto
+secuencialidad como ausencia de cascada.
+
+% =====================================================
+\section{Niveles de aislamiento (SQL\,92)}
+% =====================================================
+
+Garantizar \emph{serializabilidad estricta} para todas las transacciones
+es caro (más bloqueos, menos concurrencia). Para algunas aplicaciones
+---típicamente reportes y estadísticas--- se acepta perder precisión a
+cambio de rendimiento. SQL\,92 define cuatro niveles de aislamiento
+ordenados de más débil a más fuerte:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Nivel & Lectura sucia & No repetible & Phantom \\
+\midrule
+\texttt{READ UNCOMMITTED} & Posible    & Posible    & Posible \\
+\texttt{READ COMMITTED}   & No posible & Posible    & Posible \\
+\texttt{REPEATABLE READ}  & No posible & No posible & Posible (raro) \\
+\texttt{SERIALIZABLE}     & No posible & No posible & No posible \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Los tres fenómenos.}
+\begin{itemize}
+    \item \textbf{Lectura sucia (\emph{dirty read})}: $T_1$ lee datos que
+    $T_2$ todavía no confirmó. Si $T_2$ aborta, $T_1$ leyó un fantasma.
+    \item \textbf{Lectura no repetible}: $T_1$ lee la misma fila dos
+    veces y obtiene valores distintos porque entre lectura y lectura
+    otra transacción la actualizó y confirmó.
+    \item \textbf{Phantom read}: $T_1$ ejecuta dos veces la misma
+    consulta de rango y aparecen filas nuevas porque otra transacción
+    insertó registros que cumplen la condición.
+\end{itemize}
+
+\paragraph{Comandos SQL.}
+\begin{lstlisting}
+-- MySQL
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+-- PostgreSQL
+SET DEFAULT_TRANSACTION_ISOLATION = 'serializable';
+\end{lstlisting}
+
+% =====================================================
+\section{Control de concurrencia: protocolos basados en bloqueos}
+% =====================================================
+
+Los protocolos de bloqueo garantizan aislamiento haciendo que cada
+operación pase por un \emph{lock manager} antes de poder ejecutarse.
+
+\subsection{Modos de bloqueo}
+
+\begin{itemize}
+    \item \textbf{Compartido (S/C)}: \texttt{lock-S(Q)}. El dato $Q$ puede
+    ser leído. Varias transacciones pueden tener S sobre $Q$ a la vez.
+    \item \textbf{Exclusivo (X)}: \texttt{lock-X(Q)}. El dato $Q$ puede
+    ser leído y escrito. Sólo una transacción puede tenerlo a la vez.
+\end{itemize}
+
+Matriz de compatibilidad:
+
+\begin{center}
+\begin{tabular}{c|cc}
+\toprule
+       & S         & X         \\
+\midrule
+S      & compatible & no compatible \\
+X      & no compatible & no compatible \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Si una transacción $T_i$ pide un bloqueo que choca con uno ya tomado,
+$T_i$ \textbf{espera} hasta que se libere.
+
+\begin{nota}
+\textbf{Bloquear no alcanza por sí solo.} Si una transacción pide y
+suelta locks alegremente, distintos ítems pueden ser leídos de versiones
+inconsistentes entre sí, y el resultado no equivale a ninguna ejecución
+serial. Se necesita un \emph{protocolo} que diga cuándo se pueden tomar
+y liberar.
+\end{nota}
+
+\subsection{Posibilidad de Deadlock}
+
+Si $T_1$ tiene $X(B)$ y pide $X(A)$, y $T_2$ tiene $S(A)$ y pide $S(B)$
+\emph{(o $X(B)$)}, ninguna avanza. Esto es un \textbf{deadlock}. Para
+desbloquear, el motor debe hacer rollback de al menos una de las dos
+(la \emph{víctima}); sus locks se liberan y la otra continúa.
+
+% =====================================================
+\section{Protocolo de bloqueo de dos fases (2PL)}
+% =====================================================
+
+El protocolo más usado para garantizar serializabilidad por conflicto
+mediante bloqueos es el \textbf{Bloqueo de Dos Fases}:
+
+\begin{itemize}
+    \item \textbf{Fase de crecimiento}: la transacción puede solicitar
+    bloqueos. No puede liberar ninguno.
+    \item \textbf{Fase de decrecimiento}: la transacción puede liberar
+    bloqueos. No puede solicitar ninguno nuevo.
+\end{itemize}
+
+El punto donde una transacción libera su primer lock se llama
+\emph{punto de bloqueo}. A partir de ahí, todo lo que puede hacer es
+operar con lo que ya tiene y soltar locks.
+
+\paragraph{Garantía.} Toda planificación legal bajo 2PL es serializable
+por conflicto. La prueba se basa en mostrar que el orden de los puntos
+de bloqueo de las transacciones induce un orden serial equivalente.
+
+\subsection{Variantes}
+
+\begin{itemize}
+    \item \textbf{2PL puro o básico}: el descrito arriba. Permite
+    rollback en cascada (porque una transacción puede haber leído de
+    otra que después aborta).
+    \item \textbf{2PL estricto}: todos los \emph{bloqueos exclusivos} se
+    mantienen hasta el final (commit/rollback). Evita el rollback en
+    cascada.
+    \item \textbf{2PL riguroso}: \emph{todos} los bloqueos (S y X) se
+    retienen hasta el final. Asegura sin cascada y, además, las
+    transacciones se serializan en el orden de sus commits. Es la
+    variante que implementan la mayoría de los motores comerciales.
+\end{itemize}
+
+\subsection{Conversión de bloqueos}
+
+Para ganar concurrencia, 2PL puede admitir \emph{conversiones}:
+
+\begin{itemize}
+    \item Subir: de S a X (sólo durante la fase de crecimiento).
+    \item Bajar: de X a S (sólo durante la fase de decrecimiento).
+\end{itemize}
+
+Si los locks se retienen hasta el final, las conversiones son seguras y
+las planificaciones quedan sin cascada.
+
+% =====================================================
+\section{Protocolos basados en grafos}
+% =====================================================
+
+Otra alternativa al 2PL son los protocolos basados en grafos. Imponen
+un orden parcial $\rightarrow$ sobre los ítems de datos: si
+$d_i \rightarrow d_j$, toda transacción que use ambos debe bloquear
+$d_i$ \emph{antes} de $d_j$.
+
+\subsection{Protocolo de árbol}
+
+El conjunto de ítems se organiza como un árbol enraizado. Sólo permite
+bloqueos exclusivos. Reglas:
+
+\begin{enumerate}
+    \item El \emph{primer} bloqueo de $T_i$ puede ser sobre cualquier ítem.
+    \item Los siguientes ítems sólo pueden bloquearse si $T_i$ tiene
+    actualmente bloqueado el padre.
+    \item Los ítems se pueden desbloquear en cualquier momento.
+    \item $T_i$ no puede volver a bloquear un ítem que ya bloqueó y
+    desbloqueó.
+\end{enumerate}
+
+\paragraph{Ventajas frente a 2PL.}
+\begin{itemize}
+    \item No hay deadlocks (porque el orden está fijo de antemano).
+    \item Las transacciones pueden liberar locks tempranamente, ganando
+    concurrencia.
+\end{itemize}
+
+\paragraph{Desventajas.}
+\begin{itemize}
+    \item Una transacción puede tener que bloquear ítems que no necesita,
+    sólo para llegar a los que sí (\emph{lock pre-emption}).
+    \item Las planificaciones pueden no ser recuperables ni sin cascada.
+\end{itemize}
+
+% =====================================================
+\section{Protocolo de ordenación por marcas temporales}
+% =====================================================
+
+La alternativa a los bloqueos es decidir \emph{a priori} el orden serial
+equivalente y forzar al schedule a respetarlo. Para eso cada transacción
+$T_i$ recibe al iniciar una \textbf{marca temporal} $MT(T_i)$ única
+(reloj del sistema o contador). Si $MT(T_i) < MT(T_j)$, el motor se
+compromete a producir un schedule equivalente a la serie en la que $T_i$
+va antes que $T_j$.
+
+\paragraph{Información que mantiene cada ítem.}
+\begin{itemize}
+    \item $\mathrm{MT\text{-}E}(Q)$: mayor marca de las transacciones que
+    escribieron $Q$ con éxito.
+    \item $\mathrm{MT\text{-}L}(Q)$: mayor marca de las transacciones que
+    leyeron $Q$ con éxito.
+\end{itemize}
+
+\subsection{Reglas del protocolo}
+
+\paragraph{$T_i$ ejecuta $\mathrm{read}(Q)$.}
+\begin{itemize}
+    \item Si $MT(T_i) < \mathrm{MT\text{-}E}(Q)$: $T_i$ querría leer una
+    versión que ya fue sobrescrita por una transacción más nueva. La
+    lectura se rechaza y $T_i$ se retrocede.
+    \item En otro caso: se ejecuta y
+    $\mathrm{MT\text{-}L}(Q) \gets \max(\mathrm{MT\text{-}L}(Q), MT(T_i))$.
+\end{itemize}
+
+\paragraph{$T_i$ ejecuta $\mathrm{write}(Q)$.}
+\begin{itemize}
+    \item Si $MT(T_i) < \mathrm{MT\text{-}L}(Q)$: el valor que $T_i$
+    produciría ya fue necesario por una lectura posterior; la escritura
+    llega ``tarde'' y $T_i$ se retrocede.
+    \item Si $MT(T_i) < \mathrm{MT\text{-}E}(Q)$: $T_i$ querría
+    sobrescribir con un valor obsoleto; se retrocede.
+    \item En otro caso: se ejecuta y
+    $\mathrm{MT\text{-}E}(Q) \gets MT(T_i)$.
+\end{itemize}
+
+\subsection{Propiedades}
+
+\begin{itemize}
+    \item Garantiza planificaciones serializables.
+    \item No tiene deadlocks (las transacciones nunca esperan; se retroceden).
+    \item Puede generar planificaciones \emph{no recuperables}. Para
+    asegurar recuperabilidad hay que extenderlo (por ejemplo, retrasar
+    el \texttt{commit} de $T_i$ hasta que todas las que escribieron datos
+    leídos por $T_i$ hayan commiteado).
+    \item Costo: las transacciones largas suelen ser retrocedidas y
+    reiniciadas (\emph{starvation}).
+\end{itemize}
+
+% =====================================================
+\section{Esquemas multiversión y MVCC}
+% =====================================================
+
+Los esquemas \textbf{multiversión} mantienen varias versiones de cada
+ítem de datos para incrementar la concurrencia. Cuando una transacción
+lee, el control de concurrencia le entrega la versión adecuada según su
+marca temporal o su snapshot, sin tener que bloquear escritores.
+
+\subsection{Ordenación por marcas temporales multiversión}
+
+Cada ítem $Q$ tiene una secuencia de versiones $Q_1, Q_2, \ldots, Q_m$.
+Cada versión $Q_k$ guarda:
+
+\begin{itemize}
+    \item \texttt{contenido}: el valor de la versión.
+    \item $\mathrm{MT\text{-}E}(Q_k)$: la marca temporal de la
+    transacción que creó esa versión.
+    \item $\mathrm{MT\text{-}L}(Q_k)$: la mayor marca temporal entre las
+    transacciones que leyeron esa versión.
+\end{itemize}
+
+Cuando $T_i$ pide $\mathrm{read}(Q)$, el motor elige la versión $Q_k$
+con $\mathrm{MT\text{-}E}(Q_k)$ máximo que sea $\le MT(T_i)$: ``la
+versión más reciente que ya existía cuando empezó $T_i$''. Para
+$\mathrm{write}(Q)$, si $MT(T_i) < \mathrm{MT\text{-}L}(Q_k)$ $T_i$ se
+retrocede; si $MT(T_i) = \mathrm{MT\text{-}E}(Q_k)$ se sobrescribe esa
+versión; en otro caso se crea una nueva.
+
+\paragraph{Ventaja clave.} Las lecturas \emph{nunca esperan}: hay una
+versión apropiada y se devuelve directamente.
+
+\subsection{MVCC en PostgreSQL}
+
+PostgreSQL implementa \textbf{MVCC} (\emph{Multi-Version Concurrency
+Control}) y agrega a cada tupla dos columnas de sistema:
+
+\begin{itemize}
+    \item \texttt{xmin}: el XID de la transacción que \emph{insertó}
+    esa versión.
+    \item \texttt{xmax}: el XID de la transacción que la \emph{invalida}
+    (por update o delete); $0$ si la versión sigue viva.
+\end{itemize}
+
+Cada \texttt{UPDATE} no machaca la tupla: crea una versión nueva con
+\texttt{xmin = XID actual} y deja a la versión vieja marcada con
+\texttt{xmax = XID actual}. Cuando una transacción quiere leer la fila,
+elige la versión que sea visible para su snapshot.
+
+\paragraph{Consecuencia operativa.}
+\begin{itemize}
+    \item Lecturas no bloquean escrituras, y viceversa.
+    \item Dos transacciones concurrentes pueden ver versiones distintas
+    de la misma fila simultáneamente (ejercicio 8 del Práctico 6).
+    \item Las versiones muertas se eliminan con \texttt{VACUUM} o el
+    \texttt{autovacuum}.
+\end{itemize}
+
+PostgreSQL combina MVCC con bloqueos explícitos cuando la operación lo
+requiere: \texttt{SELECT ... FOR UPDATE}, \texttt{LOCK TABLE}, etc.
+
+\subsection{Modos de bloqueo de tabla en PostgreSQL}
+
+PostgreSQL ofrece varios modos de bloqueo a nivel tabla, en general
+adquiridos automáticamente por el comando:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Modo & Adquirido por \\
+\midrule
+\texttt{ACCESS SHARE}          & \texttt{SELECT} \\
+\texttt{ROW SHARE}             & \texttt{SELECT FOR UPDATE/SHARE} \\
+\texttt{ROW EXCLUSIVE}         & \texttt{INSERT}, \texttt{UPDATE}, \texttt{DELETE} \\
+\texttt{SHARE UPDATE EXCLUSIVE} & \texttt{VACUUM}, autoanalyze \\
+\texttt{SHARE}                 & \texttt{CREATE INDEX} \\
+\texttt{SHARE ROW EXCLUSIVE}   & --- (manual) \\
+\texttt{EXCLUSIVE}             & --- (manual) \\
+\texttt{ACCESS EXCLUSIVE}      & \texttt{ALTER/DROP TABLE}, \texttt{TRUNCATE}, \texttt{REINDEX} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Excepto \texttt{ACCESS SHARE}, los modos adquiridos en una transacción se
+retienen hasta el final.
+
+% =====================================================
+\section{Fenómeno fantasma e índices}
+% =====================================================
+
+El control de concurrencia con \emph{granularidad de tupla} (locks por
+fila, o marcas por fila) no detecta conflictos \emph{sobre tuplas
+todavía no creadas}.
+
+\paragraph{Ejemplo.} $T_1$ ejecuta
+\begin{lstlisting}
+SELECT min(precio) FROM provee WHERE nart = 2;
+\end{lstlisting}
+y $T_2$ ejecuta
+\begin{lstlisting}
+INSERT INTO provee (nart, nprov, precio) VALUES (2, 4, 1.23);
+\end{lstlisting}
+
+No hay tupla común; con granularidad de tupla el sistema no ve conflicto.
+Sin embargo, $T_1$ podría ver el \texttt{INSERT} de $T_2$ en una segunda
+ejecución y ya no sería repetible. Este problema se llama
+\textbf{fenómeno fantasma}.
+
+\paragraph{Solución.} Bloquear \emph{a nivel de predicado o de índice}:
+un lock sobre \texttt{provee.nart = 2} impide a otras transacciones
+insertar filas que cumplan esa condición. Los motores reales lo
+implementan vía \emph{predicate locks} o \emph{index range locks}.
+
+% =====================================================
+\section{Transacciones en SQL}
+% =====================================================
+
+Una transacción SQL queda iniciada implícitamente (al ejecutar la primera
+sentencia) o explícitamente (\texttt{BEGIN} / \texttt{START TRANSACTION})
+y termina con:
+
+\begin{itemize}
+    \item \texttt{COMMIT}: confirma todas las escrituras realizadas.
+    \item \texttt{ROLLBACK}: las descarta y restaura el estado anterior.
+\end{itemize}
+
+\paragraph{Lo que la norma exige.} El sistema debe garantizar
+\emph{secuencialidad} (serializabilidad por conflicto) \emph{y} ausencia
+de rollback en cascada. Implementaciones reales suelen relajar la
+serializabilidad estricta y dejar al programador elegir el nivel de
+aislamiento.
+
+\paragraph{Comandos prácticos.}
+\begin{lstlisting}
+-- MySQL
+SET autocommit = 0;
+START TRANSACTION;
+... -- operaciones
+COMMIT; -- o ROLLBACK
+
+-- PostgreSQL
+BEGIN;
+... -- operaciones
+COMMIT; -- o ROLLBACK
+\end{lstlisting}
+
+\paragraph{Constraints diferidas (PostgreSQL).} La cláusula
+\texttt{DEFERRABLE INITIALLY DEFERRED} en una FK posterga la verificación
+hasta el \texttt{COMMIT}, permitiendo estados intermedios
+``inconsistentes'' dentro de la transacción. Es útil cuando dos
+\texttt{INSERT} se referencian mutuamente.
+
+% =====================================================
+\section{Cómo se conecta con el Práctico 6}
+% =====================================================
+
+Los conceptos del Teórico 8 aparecen en el Práctico 6 distribuidos así:
+
+\begin{itemize}
+    \item \textbf{Ejercicio 1}: serializabilidad por conflicto + grafo
+    de precedencia (sección sobre serializabilidad).
+    \item \textbf{Ejercicio 2}: protocolo de bloqueo de dos fases puro
+    (sección sobre 2PL).
+    \item \textbf{Ejercicio 3}: protocolo de ordenación por marcas
+    temporales (sección sobre marcas temporales).
+    \item \textbf{Ejercicio 4}: atomicidad y \texttt{ROLLBACK} en
+    MySQL (sección sobre transacciones en SQL).
+    \item \textbf{Ejercicio 5}: nivel \texttt{SERIALIZABLE} y bloqueos
+    en MySQL (sección sobre niveles de aislamiento y bloqueos).
+    \item \textbf{Ejercicio 6}: lectura no repetible y niveles
+    \texttt{READ COMMITTED} / \texttt{REPEATABLE READ} (sección sobre
+    niveles de aislamiento).
+    \item \textbf{Ejercicio 7}: constraints deferibles en PostgreSQL
+    (sección sobre transacciones en SQL).
+    \item \textbf{Ejercicio 8}: MVCC, \texttt{xmin}, \texttt{xmax}
+    (sección sobre esquemas multiversión).
+\end{itemize}
+
+% =====================================================
+\section{Conclusión}
+% =====================================================
+
+Las ideas centrales a retener:
+
+\begin{itemize}
+    \item Una transacción es la unidad lógica del trabajo concurrente; el
+    motor garantiza para ella las propiedades ACID.
+    \item El control de concurrencia tiene que asegurar
+    \emph{aislamiento}: el resultado de la ejecución intercalada debe
+    ser equivalente a alguna ejecución serial.
+    \item El test del grafo de precedencia es la herramienta formal para
+    decidir si un schedule es serializable por conflicto.
+    \item Hay dos grandes familias de protocolos: basados en bloqueos
+    (2PL y variantes) y basados en marcas temporales. Los motores
+    modernos suelen combinar ambos y agregar multiversión (MVCC).
+    \item Los niveles de aislamiento (\texttt{READ UNCOMMITTED},
+    \texttt{READ COMMITTED}, \texttt{REPEATABLE READ},
+    \texttt{SERIALIZABLE}) ofrecen un trade-off explícito entre
+    consistencia y concurrencia, regulando qué fenómenos pueden aparecer.
+    \item Recuperabilidad y ausencia de rollback en cascada son
+    propiedades adicionales que la planificación debe cumplir para que
+    el sistema pueda revertir transacciones de manera limpia.
+\end{itemize}
+
+\end{document}
