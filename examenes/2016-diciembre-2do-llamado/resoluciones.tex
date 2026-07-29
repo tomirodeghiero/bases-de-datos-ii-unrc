@@ -1,0 +1,675 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla,es-noshorthands]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas y diagramas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,shapes.geometric,trees,fit}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Examen Final --- Dic. 2016}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={SELECT,FROM,WHERE,JOIN,ON,AND,OR,GROUP,BY,ORDER,
+        INSERT,UPDATE,DELETE,EXPLAIN,ANALYZE,
+        VARCHAR,DECIMAL,INTEGER,DATE},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstdefinestyle{sqlstyle}{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+\lstdefinestyle{plain}{
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt
+}
+\lstset{style=sqlstyle}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+% --- Comandos auxiliares ---
+\newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+\newcommand{\bloqueConsigna}{\itemcabecera{Consigna}}
+\newcommand{\bloqueIdea}{\itemcabecera{Idea}}
+\newcommand{\bloqueRespuesta}{\itemcabecera{Respuesta}}
+\newcommand{\bloqueEjemplo}{\itemcabecera{Ejemplo}}
+
+\title{Examen Final --- Bases de Datos II\\[4pt]
+       \large 2.\textsuperscript{do} llamado, turno Diciembre 2016\\[4pt]
+       \large Resolución de estudio}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Examen Final}}\\[6pt]
+    {\large 2.\textsuperscript{do} llamado --- Turno Diciembre 2016}\\[6pt]
+    {\large Resolución de estudio}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año de estudio:} & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Resolución basada en los Teóricos 6 (Procesamiento), 7 (Optimización), 8 (Transacciones) y material complementario de Open GIS.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introducción}
+% =====================================================
+
+El examen consta de cinco preguntas teóricas que cubren cuatro temas centrales del cuatrimestre: control de concurrencia (Pregunta 1), procesamiento y optimización de consultas (Preguntas 2, 3 y 4) y bases de datos espaciales (Pregunta 5). Las cinco se responden en formato \emph{Idea $\to$ Respuesta $\to$ Ejemplo}, manteniendo la convención de los prácticos. Cada pregunta apunta a una habilidad específica:
+
+\begin{itemize}
+    \item Pregunta 1 $\to$ Teórico 8: protocolos pesimistas de concurrencia.
+    \item Pregunta 2 $\to$ Teórico 6: pipeline de procesamiento de un motor.
+    \item Pregunta 3 $\to$ Teórico 7: estimación de costos para el optimizador.
+    \item Pregunta 4 $\to$ Teórico 6: algoritmos físicos de join.
+    \item Pregunta 5 $\to$ Anexo Open GIS: jerarquía de tipos espaciales.
+\end{itemize}
+
+% =====================================================
+\section{Pregunta 1: Protocolo de ordenamiento por marcas temporales}
+% =====================================================
+
+\bloqueConsigna
+
+Explique el protocolo de ordenamiento por marcas temporales. Ejemplifique.
+
+\bloqueIdea
+
+El protocolo de \emph{marcas temporales} (\emph{timestamp ordering}) es un mecanismo \textbf{pesimista, no basado en bloqueos} para garantizar \emph{serializabilidad por conflicto}. Cada transacción recibe al ingresar al sistema una marca temporal $MT(T_i)$ única y monótonamente creciente (típicamente el reloj del sistema o un contador global). El protocolo garantiza que la planificación resultante sea \emph{equivalente al orden serial de las marcas}: si $MT(T_i) < MT(T_j)$, todo conflicto entre $T_i$ y $T_j$ se resuelve como si $T_i$ se hubiera ejecutado antes que $T_j$. A diferencia de 2PL, no produce deadlocks (al no usar bloqueos), pero sí puede generar \emph{rollbacks en cascada} y \emph{starvation}.
+
+\bloqueRespuesta
+
+\textit{Estructuras que mantiene el protocolo.} Cada ítem $Q$ guarda dos marcas:
+
+\begin{itemize}
+    \item $MT\text{-}E(Q)$: la mayor marca temporal de las transacciones que escribieron $Q$ con éxito.
+    \item $MT\text{-}L(Q)$: la mayor marca temporal de las transacciones que leyeron $Q$ con éxito.
+\end{itemize}
+
+\textit{Reglas de validación.}
+
+\textit{Cuando $T_i$ ejecuta $r(Q)$:}
+\begin{itemize}
+    \item Si $MT(T_i) < MT\text{-}E(Q)$ $\Rightarrow$ rechazo. $T_i$ querría leer una versión de $Q$ que ya fue sobrescrita por una transacción más nueva; $T_i$ se retrocede y reinicia con una marca \emph{nueva} (más grande).
+    \item En otro caso $\Rightarrow$ se ejecuta y se actualiza $MT\text{-}L(Q) \gets \max(MT\text{-}L(Q),\,MT(T_i))$.
+\end{itemize}
+
+\textit{Cuando $T_i$ ejecuta $w(Q)$:}
+\begin{itemize}
+    \item Si $MT(T_i) < MT\text{-}L(Q)$ $\Rightarrow$ rechazo. El valor que produciría $T_i$ ya fue necesario por una lectura posterior; $T_i$ se retrocede.
+    \item Si $MT(T_i) < MT\text{-}E(Q)$ $\Rightarrow$ rechazo. $T_i$ querría escribir una versión obsoleta (ya hay un valor escrito por una transacción más nueva); $T_i$ se retrocede.
+    \item En otro caso $\Rightarrow$ se ejecuta y se actualiza $MT\text{-}E(Q) \gets MT(T_i)$.
+\end{itemize}
+
+\textit{Propiedades.}
+
+\begin{itemize}
+    \item Garantiza serializabilidad por conflicto: el orden serial equivalente es el de las marcas.
+    \item Libre de deadlocks: no hay esperas, todo conflicto se resuelve con rollback inmediato.
+    \item Sufre \emph{rollbacks en cascada} si una $T_i$ que abortó ya hizo escrituras que otra leyó (a menos que se combine con la \emph{Thomas's write rule} o con escritura diferida hasta commit).
+    \item Posible \emph{starvation}: una transacción larga puede ser abortada repetidamente si sus operaciones llegan tarde respecto del orden global.
+\end{itemize}
+
+\bloqueEjemplo
+
+Sean $T_1$, $T_2$, $T_3$ con $MT(T_1)=1$, $MT(T_2)=2$, $MT(T_3)=3$.
+
+\begin{itemize}
+    \item $T_1$: \texttt{leer(X); escribir(X); leer(Y); escribir(Y);}
+    \item $T_2$: \texttt{leer(X); escribir(X);}
+    \item $T_3$: \texttt{leer(Y); escribir(Y);}
+\end{itemize}
+
+Estado inicial: $MT\text{-}E(X) = MT\text{-}L(X) = 0$, $MT\text{-}E(Y) = MT\text{-}L(Y) = 0$.
+
+Schedule propuesto: $r_1(X),\, w_1(X),\, r_2(X),\, w_2(X),\, r_1(Y),\, w_1(Y),\, r_3(Y),\, w_3(Y)$.
+
+\begin{center}
+\small
+\begin{tabular}{r l l rrrr}
+\toprule
+Paso & Operación & Validación & $MT\text{-}E(X)$ & $MT\text{-}L(X)$ & $MT\text{-}E(Y)$ & $MT\text{-}L(Y)$ \\
+\midrule
+0 & inicio    & ---                                            & 0 & 0 & 0 & 0 \\
+1 & $r_1(X)$  & $1 \ge MT\text{-}E(X)=0$ OK; $MT\text{-}L(X)=1$ & 0 & 1 & 0 & 0 \\
+2 & $w_1(X)$  & $1 \ge 1$ y $1 \ge 0$ OK; $MT\text{-}E(X)=1$    & 1 & 1 & 0 & 0 \\
+3 & $r_2(X)$  & $2 \ge 1$ OK; $MT\text{-}L(X)=2$                & 1 & 2 & 0 & 0 \\
+4 & $w_2(X)$  & $2 \ge 2$ y $2 \ge 1$ OK; $MT\text{-}E(X)=2$    & 2 & 2 & 0 & 0 \\
+5 & $r_1(Y)$  & $1 \ge MT\text{-}E(Y)=0$ OK; $MT\text{-}L(Y)=1$ & 2 & 2 & 0 & 1 \\
+6 & $w_1(Y)$  & $1 \ge 1$ y $1 \ge 0$ OK; $MT\text{-}E(Y)=1$    & 2 & 2 & 1 & 1 \\
+7 & $r_3(Y)$  & $3 \ge 1$ OK; $MT\text{-}L(Y)=3$                & 2 & 2 & 1 & 3 \\
+8 & $w_3(Y)$  & $3 \ge 3$ y $3 \ge 1$ OK; $MT\text{-}E(Y)=3$    & 2 & 2 & 3 & 3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textit{Resultado:} sin rollbacks; orden serial equivalente $T_1, T_2, T_3$.
+
+\textit{Caso con rollback.} Si en cambio el schedule fuera $r_2(X), w_2(X), w_1(X)$: en el paso 3 se evaluaría $MT(T_1) = 1 < MT\text{-}E(X) = 2$ $\Rightarrow$ \textbf{rechazo}: $T_1$ se retrocede y reinicia con una marca nueva (por ejemplo $MT(T_1) = 4$).
+
+% =====================================================
+\section{Pregunta 2: Pasos en el procesamiento de una consulta SQL}
+% =====================================================
+
+\bloqueConsigna
+
+Explique los diferentes pasos en el procesamiento de una consulta SQL por parte de un motor de bases de datos. Dé un ejemplo.
+
+\bloqueIdea
+
+Una consulta SQL no se ejecuta tal como llega del cliente: el motor la atraviesa por un pipeline de cinco etapas que convierten progresivamente texto $\to$ árbol sintáctico $\to$ árbol algebraico $\to$ plan físico $\to$ ejecución. Las primeras etapas son determinísticas (parsing, validación); las del medio (optimización lógica y física) son donde el motor elige entre planes equivalentes basándose en estadísticas; la última (ejecución) llama al storage engine para mover bloques de disco a memoria.
+
+\bloqueRespuesta
+
+\textit{Pipeline canónico del procesamiento de un \texttt{SELECT}:}
+
+\begin{enumerate}
+    \item \textbf{Análisis léxico y sintáctico (parsing).} El parser convierte la cadena SQL en una serie de tokens y los organiza en un \emph{árbol sintáctico} (\emph{parse tree}). Detecta errores de sintaxis (palabras reservadas mal escritas, paréntesis sin cerrar, etc.).
+    \item \textbf{Análisis semántico (validación).} Con el árbol sintáctico, el motor consulta el \emph{catálogo} (\texttt{pg\_catalog}/\texttt{INFORMATION\_SCHEMA}) para validar: que las tablas y columnas referenciadas existan, que los tipos sean compatibles en los predicados, que el usuario tenga permisos. Resuelve identificadores ambiguos (a qué tabla pertenece cada columna).
+    \item \textbf{Traducción a álgebra relacional.} El árbol sintáctico validado se transforma en una expresión del álgebra relacional, conocida como \emph{árbol de consulta inicial}. Cada cláusula SQL se mapea a uno o más operadores: \texttt{FROM} $\to$ producto cartesiano o join; \texttt{WHERE} $\to$ $\sigma$; \texttt{SELECT} $\to$ $\Pi$; \texttt{GROUP BY} $\to \gamma$; \texttt{ORDER BY} $\to$ sort.
+    \item \textbf{Optimización.}
+    \begin{itemize}
+        \item \emph{Lógica/heurística}: aplica reglas de equivalencia (push-down de selecciones y proyecciones, reordenamiento de joins, eliminación de joins triviales). Produce un \emph{árbol algebraico optimizado}.
+        \item \emph{Física (basada en costos)}: para cada operador del árbol elige un algoritmo concreto (índice vs scan secuencial, nested loop vs hash join vs merge join, etc.) usando estadísticas del catálogo. Calcula el costo estimado de cada candidato y elige el más barato. El resultado es el \emph{plan de ejecución}.
+    \end{itemize}
+    \item \textbf{Generación de código y ejecución.} El plan se traduce a una estructura ejecutable (interpretada como árbol de iteradores en la mayoría de motores). El motor invoca cada iterador en \emph{pipeline}, pidiendo tuplas al storage engine, aplicando filtros y materializando los pasos de agregación. Las tuplas resultantes se envían al cliente.
+\end{enumerate}
+
+\textit{Donde se conecta cada etapa con las herramientas del DBA.}
+
+\begin{itemize}
+    \item Etapas 1--2 fallan con errores SQL clásicos (\texttt{syntax error}, \texttt{column does not exist}).
+    \item La etapa 4 es la que muestra \texttt{EXPLAIN}/\texttt{EXPLAIN ANALYZE}: el plan elegido.
+    \item Para influir en la etapa 4 hay tres palancas: agregar/quitar índices, ejecutar \texttt{ANALYZE} (refrescar estadísticas), o usar hints/reescribir la consulta.
+\end{itemize}
+
+\bloqueEjemplo
+
+Consulta:
+
+\begin{lstlisting}
+SELECT c.nombre, c.apellido, f.monto
+FROM cliente c
+JOIN factura f ON c.nro_cliente = f.nro_cliente
+WHERE f.monto > 100000
+ORDER BY f.monto DESC;
+\end{lstlisting}
+
+\textit{Paso 1 --- Parsing.} Tokens \texttt{SELECT}, \texttt{c.nombre}, \texttt{,}, \dots, $\to$ árbol sintáctico con nodos \emph{Project}, \emph{Join}, \emph{Filter}, \emph{Sort}.
+
+\textit{Paso 2 --- Validación.} El catálogo confirma que \texttt{cliente} y \texttt{factura} existen, que tienen las columnas referidas y que el tipo de \texttt{monto} permite la comparación con \texttt{100000}.
+
+\textit{Paso 3 --- Álgebra relacional (árbol inicial):}
+
+\[
+\Pi_{c.nombre,\,c.apellido,\,f.monto}\big(\,
+\sigma_{f.monto > 100000}(cliente \bowtie_{nro\_cliente} factura)\,\big)
+\]
+
+\textit{Paso 4 --- Optimización.}
+
+\begin{itemize}
+    \item Lógica: el predicado \texttt{f.monto > 100000} se empuja a la rama de \texttt{factura} con R7a (\emph{push-down}):
+    \[
+    \Pi_{\ldots}\big(cliente \bowtie \sigma_{monto > 100000}(factura)\big)
+    \]
+    \item Física: si hay índice sobre \texttt{factura.monto}, el optimizador puede elegir \emph{Index Range Scan} sobre el predicado; sobre el join, si \texttt{cliente.nro\_cliente} es PK indexada, suele preferir \emph{Nested Loop} con \texttt{factura} ya filtrada como tabla externa.
+\end{itemize}
+
+\textit{Paso 5 --- Plan de ejecución (ejemplo PostgreSQL):}
+
+\begin{lstlisting}[style=plain]
+Sort  (key=f.monto DESC)
+  -> Nested Loop
+       -> Index Scan using idx_factura_monto on factura f
+            Index Cond: (f.monto > 100000)
+       -> Index Scan using pk_cliente on cliente c
+            Index Cond: (c.nro_cliente = f.nro_cliente)
+\end{lstlisting}
+
+Cada iterador entrega tuplas al de arriba; \emph{Sort} las acumula y emite ordenadas al cliente. Si \texttt{factura.monto} tuviese además un índice descendente, \emph{Sort} podría desaparecer.
+
+% =====================================================
+\section{Pregunta 3: Información estadística para estimación de costos}
+% =====================================================
+
+\bloqueConsigna
+
+¿Qué información estadística se utiliza para estimación de costos de consultas? Dé un ejemplo de estimación de costos.
+
+\bloqueIdea
+
+El optimizador físico necesita \emph{predecir} qué tan caro saldrá cada plan candidato sin ejecutarlo. Para eso usa estadísticas precalculadas sobre las tablas y sus columnas, almacenadas en el catálogo del motor. Las estadísticas se refrescan con \texttt{ANALYZE} (PostgreSQL) o \texttt{ANALYZE TABLE} (MySQL); sin estadísticas actualizadas, el optimizador opera a ciegas y puede elegir planes pésimos.
+
+\bloqueRespuesta
+
+\textit{Estadísticas por relación (tabla):}
+
+\begin{itemize}
+    \item $n_r$: cantidad de tuplas (\texttt{pg\_class.reltuples} / \texttt{INFORMATION\_SCHEMA.TABLES.TABLE\_ROWS}).
+    \item $b_r$: cantidad de bloques que ocupa $r$ (\texttt{pg\_class.relpages} / pages calculados).
+    \item $l_r$: tamaño promedio de una tupla en bytes.
+    \item $f_r$: \emph{factor de bloqueo} = $\lfloor B / l_r \rfloor$ donde $B$ es el tamaño de bloque del motor.
+\end{itemize}
+
+\textit{Estadísticas por atributo (columna):}
+
+\begin{itemize}
+    \item $V(A, r)$: cantidad de valores distintos de $A$ en $r$ (\texttt{n\_distinct} en \texttt{pg\_stats}; \texttt{CARDINALITY} en \texttt{INFORMATION\_SCHEMA.STATISTICS}).
+    \item $\min(A, r)$, $\max(A, r)$: rango.
+    \item \emph{Most Common Values (MCVs)} y sus frecuencias (\texttt{most\_common\_vals}, \texttt{most\_common\_freqs} en \texttt{pg\_stats}): permiten estimar selectividad para igualdades sobre valores populares.
+    \item \emph{Histograma} (equi-depth o equi-width, en \texttt{histogram\_bounds}): permite estimar selectividad para rangos.
+    \item \emph{Fracción de nulos} (\texttt{null\_frac}).
+    \item \emph{Correlación} entre orden lógico y físico (\texttt{correlation} en pg, no expuesto en MySQL): cercana a 1 indica que el atributo es buen candidato para Index Scan.
+\end{itemize}
+
+\textit{Estadísticas por índice (en motores que las usan separadas):}
+
+\begin{itemize}
+    \item Altura del árbol $h_i$.
+    \item Bloques de hoja (\texttt{leaf\_pages} en \texttt{mysql.innodb\_index\_stats}).
+    \item Cantidad de valores distintos del prefijo del índice.
+\end{itemize}
+
+\textit{Fórmulas básicas de estimación:}
+
+\textit{Cardinalidad de una selección} $\sigma_{A=v}(r)$ (selectividad uniforme):
+
+\[
+\text{tuplas resultantes} \approx \frac{n_r}{V(A,r)}
+\]
+
+\textit{Cardinalidad de un join} $r \bowtie_A s$:
+
+\[
+|r \bowtie s| \approx \frac{n_r \, n_s}{\max\{V(A,r),\,V(A,s)\}}
+\]
+
+(si $A$ es clave en $s$, la cota se reduce a $|r \bowtie s| \le n_r$).
+
+\textit{Costo de los algoritmos básicos (Teórico 6):}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Algoritmo & Operación & Costo \\
+\midrule
+A1 (búsqueda lineal)      & $\sigma$            & $b_r \cdot t_T + t_b$ \\
+A3 (igualdad por PK)      & $\sigma_{A=v}$, A clave & $(h_i + 1)(t_T + t_b)$ \\
+A5 (igualdad por sec.)    & $\sigma_{A=v}$      & $(h_i + n_r/V(A,r))(t_T + t_b)$ \\
+A6 (rango por primario)   & $\sigma_{A<v}$      & $h_i\,(t_T+t_b) + b\,t_T$ \\
+A7 (rango por sec.)       & $\sigma_{A<v}$      & $(h_i + b)(t_T + t_b)$ con $b$ tuplas matcheadas \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+donde $t_T$ es el tiempo de transferencia de un bloque y $t_b$ el tiempo de búsqueda (\emph{seek}).
+
+\bloqueEjemplo
+
+Consideremos la relación \texttt{factura} con las siguientes estadísticas:
+
+\[
+n_r = 100\,000,\quad b_r = 5\,000 \text{ bloques},\quad V(monto, r) = 1\,000
+\]
+
+Costos hipotéticos: $t_T = 1$\,ms (transferencia), $t_b = 4$\,ms (seek). Índice secundario B+tree sobre \texttt{monto} con altura $h_i = 4$.
+
+\textit{Consulta:} \texttt{SELECT * FROM factura WHERE monto = 50000}.
+
+\textit{Estimación de cardinalidad:} $n_r / V(monto,r) = 100\,000 / 1\,000 = 100$ tuplas matchearían.
+
+\textit{Costos de los planes alternativos:}
+
+\textit{Plan A --- Búsqueda lineal (A1):}
+\[
+\text{Costo}_{A1} = b_r \cdot t_T + t_b = 5\,000 \cdot 1\,\text{ms} + 4\,\text{ms} \approx 5\,004\,\text{ms} \approx 5\,\text{seg}
+\]
+
+\textit{Plan B --- Índice secundario (A5):}
+\[
+\text{Costo}_{A5} = (h_i + n_r/V(A,r))(t_T + t_b) = (4 + 100)(1 + 4)\,\text{ms} = 104 \cdot 5 = 520\,\text{ms}
+\]
+
+\textit{Conclusión.} El plan con índice secundario es $\approx 10\times$ más barato que la búsqueda lineal. El optimizador elegirá A5 siempre que la cardinalidad estimada se mantenga baja; si $V(monto, r)$ fuera mucho más chico (por ejemplo $V = 5$, dando 20\,000 matches), el cálculo cambiaría a $\approx 100\,000$\,ms con A5 vs los 5\,000\,ms de A1 y el plan elegido sería el \emph{Seq Scan}.
+
+\begin{nota}
+La curva donde A1 empieza a ser más barato que A5 se llama \emph{break-even point} y depende del cociente entre tuplas matcheadas y total. Para tablas tipo \texttt{producto} con pocos valores distintos en una columna (status, tipo, etc.) los índices secundarios suelen no usarse: el motor prefiere leer toda la tabla.
+\end{nota}
+
+% =====================================================
+\section{Pregunta 4: Algoritmo de Merge Join}
+% =====================================================
+
+\bloqueConsigna
+
+Explique el algoritmo de Merge Join.
+
+\bloqueIdea
+
+\emph{Merge Join} (también llamado \emph{Sort-Merge Join}) es uno de los tres algoritmos físicos clásicos para resolver $r \bowtie_A s$, junto con \emph{Nested Loop} y \emph{Hash Join}. Su idea es la misma que el \emph{merge} del Mergesort: si ambas entradas vienen ordenadas por el atributo de join, basta con recorrerlas una vez en paralelo, comparando los punteros y emitiendo las parejas cuando los valores coinciden. Cuando no vienen ordenadas, el algoritmo puede aún aplicarse pagando un \emph{sort externo} previo en cada entrada.
+
+\bloqueRespuesta
+
+\textit{Precondiciones.}
+
+\begin{itemize}
+    \item Las dos relaciones $r$ y $s$ deben estar ordenadas por el atributo (o lista de atributos) de join $A$.
+    \item Si no lo están, el motor las ordena previamente con un \emph{external merge sort} (típicamente \emph{multi-way merge sort} en disco).
+    \item Si ya hay un índice ordenado sobre $A$ en alguna relación, alcanza con leer el índice secuencialmente para evitar el sort.
+\end{itemize}
+
+\textit{Pseudocódigo (caso de join natural por igualdad sobre $A$):}
+
+\begin{lstlisting}[style=plain]
+i := 0; j := 0
+while i < |r| and j < |s|:
+    if r[i].A < s[j].A:
+        i := i + 1
+    elif r[i].A > s[j].A:
+        j := j + 1
+    else:                       // r[i].A == s[j].A: match
+        v := r[i].A
+        // delimitamos el bloque de s con valor v
+        ts := j
+        while j < |s| and s[j].A == v:
+            j := j + 1
+        te := j
+        // por cada tupla de r con valor v, emitir producto con [ts..te)
+        while i < |r| and r[i].A == v:
+            for k from ts to te - 1:
+                output (r[i], s[k])
+            i := i + 1
+\end{lstlisting}
+
+\textit{Análisis de costo.}
+
+\begin{itemize}
+    \item \emph{Caso óptimo} (ambas relaciones ya ordenadas):
+    \[
+    \text{Costo} = b_r + b_s \quad \text{(bloques transferidos)}
+    \]
+    Es decir, se lee cada relación una sola vez.
+    \item \emph{Caso con sort previo} (external merge sort, $M$ buffers en memoria):
+    \[
+    \text{Costo} \approx b_r + b_s + 2\,b_r\,\lceil \log_{M-1}\!\lceil b_r/M \rceil \rceil + 2\,b_s\,\lceil \log_{M-1}\!\lceil b_s/M \rceil \rceil
+    \]
+    En la práctica, con $M$ suficientemente grande, el sort lleva $\approx 2 \cdot 2 \cdot (b_r + b_s)$ transferencias.
+\end{itemize}
+
+\textit{Propiedades y comparación.}
+
+\begin{itemize}
+    \item Costa lineal sobre los inputs cuando vienen ordenados $\Rightarrow$ excelente para relaciones grandes con índice o que ya se ordenaron por otro paso del plan.
+    \item \emph{Preserva el orden} de salida sobre $A$, lo que permite eliminar un \texttt{ORDER BY} posterior por el mismo atributo. Hash Join no preserva orden; Nested Loop tampoco.
+    \item Maneja \emph{duplicados} correctamente con el bucle interno que delimita el bloque de tuplas con el mismo valor en $s$.
+    \item Bueno con \emph{discos rotacionales} porque el acceso es secuencial; con SSD la ventaja respecto de hash join se reduce.
+    \item \emph{No funciona} para condiciones de join no equi-join (rangos, $\neq$, expresiones); en esos casos el motor cae a nested loop o hash join (este último solo soporta equi-joins también).
+\end{itemize}
+
+\textit{Decisión del optimizador.}
+
+\begin{itemize}
+    \item Si ambas entradas tienen índice ordenado sobre $A$ y no caben en memoria, Merge Join es típicamente el ganador.
+    \item Si una entrada cabe en memoria, Hash Join suele ganar (construye tabla hash sobre la chica y prueba con la grande).
+    \item Si una entrada es muy chica y la otra muy grande con índice sobre $A$, Nested Loop puede ganar (recorre la chica y hace lookups en la grande).
+\end{itemize}
+
+\bloqueEjemplo
+
+Sea $r$ ordenada por $A$ y $s$ ordenada por $A$:
+
+\begin{center}
+\begin{tabular}{cc|cc}
+\toprule
+$r.A$ & $r.B$ & $s.A$ & $s.C$ \\
+\midrule
+1 & a & 1 & x \\
+1 & b & 2 & y \\
+3 & c & 2 & z \\
+4 & d & 4 & w \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Traza del algoritmo:
+
+\begin{enumerate}
+    \item $i{=}0, j{=}0$: $r[0].A{=}1 = s[0].A{=}1$ $\to$ match. Delimitar bloque de $s$ con valor 1: $[s[0]]$. Por cada $r$ con valor 1: $r[0]$ y $r[1]$. Emite $(1,a,x)$ y $(1,b,x)$. Avanza $i$ a 2, $j$ a 1.
+    \item $i{=}2, j{=}1$: $r[2].A{=}3$ vs $s[1].A{=}2$. $3 > 2$ $\to$ avanza $j$ a 2.
+    \item $i{=}2, j{=}2$: $r[2].A{=}3$ vs $s[2].A{=}2$. $3 > 2$ $\to$ avanza $j$ a 3.
+    \item $i{=}2, j{=}3$: $r[2].A{=}3$ vs $s[3].A{=}4$. $3 < 4$ $\to$ avanza $i$ a 3.
+    \item $i{=}3, j{=}3$: $r[3].A{=}4 = s[3].A{=}4$ $\to$ match. Emite $(4,d,w)$. Avanza ambos.
+    \item Fin.
+\end{enumerate}
+
+Resultado: $\{(1,a,x), (1,b,x), (4,d,w)\}$.
+
+Cada tupla de $r$ se leyó exactamente una vez (4 lecturas), cada tupla de $s$ una vez (4 lecturas). Total: $b_r + b_s$ transferencias.
+
+% =====================================================
+\section{Pregunta 5: Diagrama jerárquico Open GIS}
+% =====================================================
+
+\bloqueConsigna
+
+Muestre Diagrama jerárquico tipos de geometrías de Open GIS y ejemplifique gráficamente 3 de tipos de geometrías instanciables.
+
+\bloqueIdea
+
+El estándar \emph{OGC Simple Features Access} (SFA), publicado por el \emph{Open Geospatial Consortium}, define una jerarquía de tipos para representar entidades geográficas en bases de datos espaciales (PostGIS, Oracle Spatial, MySQL Spatial). La raíz es la clase abstracta \texttt{Geometry}; sus descendientes se dividen en \emph{primitivas básicas} (Point, Curve, Surface) y \emph{colecciones} (GeometryCollection y sus subtipos). Solo algunos descendientes son \textbf{instanciables}: los demás son clases abstractas que sirven para organizar la jerarquía.
+
+\bloqueRespuesta
+
+\textit{Diagrama jerárquico (las clases en \textbf{negrita} son instanciables; el resto son abstractas):}
+
+\begin{center}
+\begin{tikzpicture}[
+    every node/.style={font=\footnotesize,
+        rectangle,draw=gray!60,rounded corners=2pt,
+        inner sep=3pt,minimum width=22mm},
+    every path/.style={draw=gray!70,-{Latex}},
+    level distance=10mm,
+    level 1/.style={sibling distance=42mm},
+    level 2/.style={sibling distance=22mm},
+    level 3/.style={sibling distance=20mm}
+]
+\node {Geometry \textit{(abs)}}
+  child { node[fill=green!10] {\textbf{Point}} }
+  child { node {Curve \textit{(abs)}}
+    child { node[fill=green!10] {\textbf{LineString}}
+      child { node {Line} }
+      child { node {LinearRing} } } }
+  child { node {Surface \textit{(abs)}}
+    child { node[fill=green!10] {\textbf{Polygon}} }
+    child { node {PolyhedralSurface} } }
+  child { node[fill=green!10] {\textbf{GeometryCollection}}
+    child { node[fill=green!10] {\textbf{MultiPoint}} }
+    child { node {MultiCurve \textit{(abs)}}
+      child { node[fill=green!10,xshift=-6mm] {\textbf{MultiLineString}} } }
+    child { node {MultiSurface \textit{(abs)}}
+      child { node[fill=green!10,xshift=6mm] {\textbf{MultiPolygon}} } } };
+\end{tikzpicture}
+\end{center}
+
+\textit{Tipos instanciables} (los que efectivamente pueden almacenarse y consultarse):
+
+\begin{itemize}
+    \item \texttt{Point}: un único punto $(x, y)$ (o $(x, y, z)$ en 3D).
+    \item \texttt{LineString}: secuencia de puntos conectados por segmentos rectos.
+    \item \texttt{Polygon}: región delimitada por un anillo exterior (LinearRing cerrado) y opcionalmente anillos interiores (\emph{holes}).
+    \item \texttt{MultiPoint}, \texttt{MultiLineString}, \texttt{MultiPolygon}: colecciones homogéneas de los anteriores.
+    \item \texttt{GeometryCollection}: colección heterogénea.
+\end{itemize}
+
+\textit{Tipos abstractos} (existen para tipificar pero no se pueden instanciar): \texttt{Geometry}, \texttt{Curve}, \texttt{Surface}, \texttt{MultiCurve}, \texttt{MultiSurface}.
+
+\bloqueEjemplo
+
+Tres geometrías instanciables, con su WKT (\emph{Well-Known Text}, la representación textual estándar):
+
+\textit{1) Point.} Un único par de coordenadas $(2, 3)$.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.5]
+    \draw[->,gray!60] (-0.5,0) -- (5,0) node[right,font=\scriptsize]{$x$};
+    \draw[->,gray!60] (0,-0.5) -- (0,4) node[above,font=\scriptsize]{$y$};
+    \foreach \x in {1,...,4} \draw[gray!30] (\x,0) -- (\x,3.5);
+    \foreach \y in {1,2,3}   \draw[gray!30] (0,\y) -- (4.5,\y);
+    \fill[red] (2,3) circle (4pt);
+    \node[above right,font=\scriptsize] at (2,3) {$P=(2,3)$};
+\end{tikzpicture}
+\end{center}
+
+WKT: \texttt{POINT(2 3)}
+
+\textit{2) LineString.} Polilínea por los puntos $(0,0), (1,2), (3,1), (4,3)$.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.5]
+    \draw[->,gray!60] (-0.5,0) -- (5,0) node[right,font=\scriptsize]{$x$};
+    \draw[->,gray!60] (0,-0.5) -- (0,4) node[above,font=\scriptsize]{$y$};
+    \foreach \x in {1,...,4} \draw[gray!30] (\x,0) -- (\x,3.5);
+    \foreach \y in {1,2,3}   \draw[gray!30] (0,\y) -- (4.5,\y);
+    \draw[thick,blue] (0,0) -- (1,2) -- (3,1) -- (4,3);
+    \foreach \p in {(0,0),(1,2),(3,1),(4,3)}
+        \fill[blue] \p circle (3pt);
+\end{tikzpicture}
+\end{center}
+
+WKT: \texttt{LINESTRING(0 0, 1 2, 3 1, 4 3)}
+
+\textit{3) Polygon.} Polígono cerrado con anillo exterior $(0,0) \to (4,0) \to (4,3) \to (1,4) \to (0,2) \to (0,0)$.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.5]
+    \draw[->,gray!60] (-0.5,0) -- (5,0) node[right,font=\scriptsize]{$x$};
+    \draw[->,gray!60] (0,-0.5) -- (0,5) node[above,font=\scriptsize]{$y$};
+    \foreach \x in {1,...,4} \draw[gray!30] (\x,0) -- (\x,4.5);
+    \foreach \y in {1,...,4} \draw[gray!30] (0,\y) -- (4.5,\y);
+    \fill[green!30,opacity=0.6] (0,0) -- (4,0) -- (4,3) -- (1,4) -- (0,2) -- cycle;
+    \draw[thick,green!50!black] (0,0) -- (4,0) -- (4,3) -- (1,4) -- (0,2) -- cycle;
+    \foreach \p in {(0,0),(4,0),(4,3),(1,4),(0,2)}
+        \fill[green!50!black] \p circle (3pt);
+\end{tikzpicture}
+\end{center}
+
+WKT: \texttt{POLYGON((0 0, 4 0, 4 3, 1 4, 0 2, 0 0))}
+
+\begin{nota}
+Notar que en \texttt{POLYGON} el primer punto se repite al final del anillo (\texttt{0 0} aparece dos veces): es el requisito de \emph{LinearRing}, que debe estar cerrado. Si el polígono tuviera agujeros (\emph{holes}), se agregarían como anillos interiores adicionales dentro del paréntesis exterior: \texttt{POLYGON((exterior...), (hole1...), (hole2...))}.
+\end{nota}
+
+\textit{Uso en SQL espacial (PostGIS):}
+
+\begin{lstlisting}[style=plain]
+CREATE TABLE lugares (
+    id   serial PRIMARY KEY,
+    geom geometry(Polygon, 4326)
+);
+
+INSERT INTO lugares (geom)
+VALUES (ST_GeomFromText('POLYGON((0 0, 4 0, 4 3, 1 4, 0 2, 0 0))', 4326));
+
+SELECT id, ST_Area(geom), ST_AsText(geom) FROM lugares;
+\end{lstlisting}
+
+% =====================================================
+\section*{Cierre}
+\addcontentsline{toc}{section}{Cierre}
+% =====================================================
+
+El examen recorre tres bloques temáticos del cuatrimestre:
+
+\begin{enumerate}
+    \item \textbf{Concurrencia} (Pregunta 1): marcas temporales como alternativa pesimista a 2PL, libre de deadlocks pero con rollbacks en cascada y starvation.
+    \item \textbf{Procesamiento y optimización} (Preguntas 2--4): el pipeline completo desde el parser hasta el plan físico, las estadísticas que alimentan al optimizador y un algoritmo concreto de join basado en orden.
+    \item \textbf{Modelos no relacionales} (Pregunta 5): la jerarquía OGC de tipos espaciales y la distinción entre clases abstractas y geometrías instanciables.
+\end{enumerate}
+
+La idea común detrás de las cinco preguntas es la misma que atraviesa toda la materia: \emph{el motor toma decisiones por nosotros}, y lo que como usuarios podemos hacer es entender el modelo conceptual (qué garantiza un protocolo, qué fórmulas usa el optimizador, qué tipos define un estándar) para escribir mejor SQL y diseñar mejores esquemas.
+
+\end{document}

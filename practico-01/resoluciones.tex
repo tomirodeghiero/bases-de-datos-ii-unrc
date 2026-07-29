@@ -71,6 +71,15 @@
 
 % --- Comandos auxiliares ---
 \newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+\newcommand{\bloqueConsigna}{\itemcabecera{Consigna}}
+\newcommand{\bloqueIdea}{\itemcabecera{Qu\'e se pide / idea}}
+\newcommand{\bloqueSolucion}{\itemcabecera{Soluci\'on en SQL}}
+\newcommand{\bloquePorque}{\itemcabecera{Por qu\'e funciona}}
+
+% Bloque para reproducir el esquema relacional textual del enunciado
+\newenvironment{esquema}{%
+    \begin{quote}\ttfamily\small\setlength{\parskip}{0pt}\setlength{\parindent}{0pt}%
+}{\end{quote}}
 
 \title{Trabajo Práctico N.\textsuperscript{o} 1: Repaso de SQL\\[4pt]
        \large Bases de Datos II}
@@ -115,34 +124,50 @@
 % =====================================================
 \section{Introducción}
 
-Este trabajo práctico funciona como un repaso integral de SQL y consolida las herramientas que se utilizarán a lo largo de la materia. La consigna se divide en tres ejercicios: primero, definir el esquema de tres bases de datos identificando claves primarias, claves secundarias, claves foráneas, integridad referencial y restricciones de dominio; en segundo lugar, cargar datos coherentes en esas bases; y por último, resolver una serie de consultas SQL y proponer otras adicionales utilizando álgebra relacional.
+Este trabajo práctico es un repaso integral de SQL. Se divide en tres ejercicios: primero definir el esquema de tres bases de datos identificando claves primarias, secundarias (\texttt{UNIQUE}), foráneas, integridad referencial y restricciones de dominio; segundo, cargar datos coherentes; y tercero, resolver consultas SQL y plantear consultas adicionales en álgebra relacional.
 
-La resolución se acompaña de los motores de bases de datos pedidos por la cátedra (MySQL 8 o superior, PostgreSQL 14 o superior y Oracle XE 10g/11g). En cada inciso se aclara qué motores corresponden y, cuando alguno de ellos no soporta una construcción del SQL estándar (como ocurre con \texttt{CREATE DOMAIN} en MySQL u Oracle), se documenta la alternativa empleada para emularla.
+La resolución usa los motores pedidos por la cátedra: MySQL 8 o superior, PostgreSQL 14 o superior y Oracle XE 10g/11g. Cuando un motor no soporta una construcción del SQL estándar (por ejemplo \texttt{CREATE DOMAIN} en MySQL u Oracle), se documenta la alternativa empleada para emularla.
 
-A lo largo de la entrega se trabaja con tres bases distintas, una por cada inciso del Ejercicio 1. Para evitar colisiones de nombres entre tablas (varias tablas se llaman \texttt{cliente}), cada base se aísla en un esquema o base de datos propio: \texttt{practico1a}, \texttt{practico1b} y \texttt{practico1c}. Los datos cargados en el Ejercicio 2 están pensados específicamente para que las consultas del Ejercicio 3 devuelvan resultados significativos.
+Para evitar colisiones de nombres entre tablas, cada base se aísla en un esquema o base propia: \texttt{practico1a}, \texttt{practico1b} y \texttt{practico1c}. Los datos cargados en el Ejercicio 2 están pensados para que las consultas del Ejercicio 3 devuelvan resultados significativos.
+
+Cada ejercicio sigue siempre la misma estructura: \textbf{Consigna} (texto literal del enunciado), \textbf{Qué se pide / idea} (lectura natural del problema), \textbf{Solución en SQL} (código por motor) y \textbf{Por qué funciona} (lógica de la resolución).
 
 % =====================================================
 % Ejercicio 1
 % =====================================================
 \section{Ejercicio 1: Definición de las bases de datos}
 
-El primer ejercicio se centra en el DDL: definir las tablas con \texttt{CREATE TABLE} y declarar las restricciones que el enunciado pide explícita o implícitamente. Las cláusulas más relevantes son \texttt{PRIMARY KEY}, \texttt{UNIQUE}, \texttt{CHECK} y \texttt{FOREIGN KEY}, mientras que la noción de dominio se expresa con \texttt{CREATE DOMAIN} cuando el motor lo soporta y, en caso contrario, se emula con \texttt{CHECK} o tipos enumerados.
+\bloqueConsigna
 
+Crear las bases de Datos e Identificar las claves primarias, secundarias (cláusula UNIQUE), Claves foráneas, cláusulas de integridad referencial (Foreing key), restricciones de dominio; correspondientes a los ejercicios:
+
+\bloqueIdea
+
+Es un ejercicio de DDL puro: por cada esquema hay que escribir el \texttt{CREATE TABLE} con \texttt{PRIMARY KEY}, \texttt{UNIQUE}, \texttt{CHECK} y \texttt{FOREIGN KEY}, y elegir las acciones referenciales (\texttt{ON DELETE CASCADE} o \texttt{RESTRICT}) según lo que pide cada inciso. Cuando el motor no expone \texttt{CREATE DOMAIN}, los dominios se emulan con \texttt{CHECK} sobre la columna o con tipos enumerados.
+
+% -----------------------------------------------------
 \subsection{Inciso a) Clientes, productos, ítems y facturas}
 
-\itemcabecera{Decisiones de modelado}
+\bloqueConsigna
 
-\begin{itemize}
-    \item \texttt{cliente.nro\_cliente}, \texttt{producto.cod\_producto} y \texttt{factura.nro\_factura} son las claves primarias naturales del enunciado.
-    \item Se agrega \texttt{UNIQUE} sobre \texttt{cliente.telefono} como clave secundaria razonable, ya que en este dominio no es esperable que dos clientes distintos compartan teléfono.
-    \item \texttt{factura.nro\_cliente} se declara como clave foránea hacia \texttt{cliente}, cerrando la relación 1:N entre clientes y facturas.
-    \item \texttt{item\_factura} se modela con clave primaria compuesta \texttt{(cod\_producto, nro\_factura)}: cada par (producto, factura) aparece una sola vez.
-    \item El enunciado pide que al borrar un cliente se elimine toda su información de facturas. Para cumplirlo, \texttt{factura.nro\_cliente} se define con \texttt{ON DELETE CASCADE} y, en consecuencia, \texttt{item\_factura.nro\_factura} también se propaga con \texttt{ON DELETE CASCADE} para evitar ítems huérfanos.
-    \item En cambio, no se debe permitir borrar un producto que ya fue facturado: \texttt{item\_factura.cod\_producto} se declara con \texttt{ON DELETE RESTRICT}, comportamiento que aborta la operación si existen referencias.
-    \item Las restricciones de dominio se traducen en \texttt{CHECK}: precio estrictamente positivo, stock mínimo y máximo no negativos y \texttt{stock\_minimo <= stock\_maximo}.
-\end{itemize}
+\begin{esquema}
+Cliente (\underline{nro\_cliente}, apellido, nombre, direcci\'on, tel\'efono)\\
+Producto (\underline{cod\_producto}, descripci\'on, precio, stock\_minimo, stock\_maximo, cantidad)\\
+ItemFactura (\underline{cod\_producto, nro\_factura}, cantidad, precio)\\
+Factura (\underline{nro\_factura}, nro\_cliente, fecha, monto)
+\end{esquema}
 
-\itemcabecera{DDL en MySQL 8+}
+Considerar el precio no puede ser 0 ni negativo; el Stock mínimo no puede ser mayor que el Stock máximo. Tener en cuenta al borrar un cliente debe eliminarse toda la información de facturas realizadas para el mismo; y al eliminar un producto, no permitir hacerlo si hay alguna factura en la que fue utilizado.
+
+\textbf{Nota:} Resolver utilizando los motores de MYSQL y Postgres.
+
+\bloqueIdea
+
+Hay cuatro tablas con una jerarquía clara: \texttt{cliente} y \texttt{producto} son las entidades; \texttt{factura} es 1:N respecto de \texttt{cliente}; e \texttt{item\_factura} es la tabla intermedia con clave primaria compuesta \texttt{(cod\_producto, nro\_factura)}. La parte interesante es traducir las reglas en lenguaje natural a SQL: ``precio mayor a 0'' es un \texttt{CHECK}; ``al borrar un cliente, eliminar sus facturas'' es \texttt{ON DELETE CASCADE}; ``no dejar borrar un producto facturado'' es \texttt{ON DELETE RESTRICT}.
+
+\bloqueSolucion
+
+\textit{MySQL 8+:}
 
 \begin{lstlisting}
 CREATE DATABASE IF NOT EXISTS practico1a_mysql;
@@ -201,7 +226,7 @@ CREATE TABLE item_factura (
 );
 \end{lstlisting}
 
-\itemcabecera{DDL en PostgreSQL 14+}
+\textit{PostgreSQL 14+:}
 
 \begin{lstlisting}
 CREATE SCHEMA IF NOT EXISTS practico1a;
@@ -260,21 +285,40 @@ CREATE TABLE item_factura (
 );
 \end{lstlisting}
 
-\subsection{Inciso b) Vehículos, personas, parquímetros y estacionamiento}
-
-\itemcabecera{Decisiones de modelado}
+\bloquePorque
 
 \begin{itemize}
-    \item \texttt{vehiculo.patente}, \texttt{persona.dni} y \texttt{parquimetro.id\_parquimetro} son las claves primarias del problema.
-    \item La relación N:N entre vehículos y personas (un vehículo puede tener varios dueños) se resuelve con \texttt{duenio} como tabla intermedia, usando \texttt{(patente, dni)} como clave primaria compuesta.
-    \item Se agrega \texttt{UNIQUE (calle, altura)} en \texttt{parquimetro}, dado que no tiene sentido que dos parquímetros distintos compartan exactamente la misma ubicación.
-    \item El dominio \texttt{nombre\_y\_apellido VARCHAR(45)} se emula a nivel de columna, ya que ni MySQL ni Oracle implementan \texttt{CREATE DOMAIN} del estándar.
-    \item El dominio del atributo \texttt{color} queda restringido a \texttt{\{gris, negro, azul\}}: en MySQL se usa \texttt{ENUM} y en Oracle un \texttt{CHECK} con \texttt{IN (...)}.
-    \item Para que no se pueda borrar un vehículo que ya fue estacionado, la FK desde \texttt{estacionamiento} hacia \texttt{vehiculo} se deja con el comportamiento por defecto (\texttt{RESTRICT}/\texttt{NO ACTION}).
-    \item El \texttt{id\_estacionamiento} es autonumerado: \texttt{AUTO\_INCREMENT} en MySQL y la combinación \texttt{SEQUENCE} + trigger \texttt{BEFORE INSERT} en Oracle 10g/11g XE.
+    \item Las claves primarias son las del enunciado (\texttt{nro\_cliente}, \texttt{cod\_producto}, \texttt{nro\_factura}) y la compuesta \texttt{(cod\_producto, nro\_factura)} en \texttt{item\_factura} evita que un mismo producto figure dos veces en la misma factura.
+    \item Se agrega \texttt{UNIQUE (telefono)} como clave secundaria razonable: en este dominio dos clientes distintos no comparten teléfono.
+    \item Para cumplir ``al borrar un cliente, eliminar sus facturas'', la FK \texttt{factura.nro\_cliente} usa \texttt{ON DELETE CASCADE}. Para evitar ítems huérfanos al borrar una factura, \texttt{item\_factura.nro\_factura} también cascadea.
+    \item Para que un producto facturado no pueda borrarse, \texttt{item\_factura.cod\_producto} usa \texttt{ON DELETE RESTRICT}, que aborta el \texttt{DELETE} si quedan referencias.
+    \item Los dominios pedidos se expresan con \texttt{CHECK}: \texttt{precio > 0}, \texttt{stock\_minimo <= stock\_maximo} y stocks no negativos.
 \end{itemize}
 
-\itemcabecera{DDL en MySQL 8+}
+% -----------------------------------------------------
+\subsection{Inciso b) Vehículos, personas, parquímetros y estacionamiento}
+
+\bloqueConsigna
+
+\begin{esquema}
+Vehiculo (\underline{\#patente}, marca, modelo, color, saldoActual)\\
+Persona (\underline{dni}, nombreYApellido, direccion)\\
+Due\~no (\underline{\#patente, dni})\\
+Estacionamiento (\underline{\#estacionamiento}, \#patente, \#parqu\'imetro, fecha, saldoInicio, saldoFinal, horaEntrada, horaSalida)\\
+Parqu\'imetro (\underline{\#parqu\'imetro}, calle, altura)
+\end{esquema}
+
+Considerar que el número de calle no puede ser un número negativo ni superior a 5000; crear un dominio para el nombre y apellido de una persona que es un varchar de 45. Considerar que el dominio del atributo color de un vehículo es \{gris, negro, azul\}. No permitir eliminar un vehículo si este fue estacionado. El \#estacionamiento debe ser autonumerado.
+
+\textbf{Nota:} Resolver utilizando los motores de MYSQL, Oracle.
+
+\bloqueIdea
+
+Hay una relación N:N entre \texttt{persona} y \texttt{vehiculo} que se resuelve con la tabla puente \texttt{duenio}. La tabla central es \texttt{estacionamiento}, que referencia simultáneamente a un \texttt{vehiculo} y a un \texttt{parquimetro}. Lo más sutil es la diferencia entre motores: MySQL tiene \texttt{ENUM} y \texttt{AUTO\_INCREMENT}, Oracle no, y hay que emular ambos con \texttt{CHECK IN (...)} y con \texttt{SEQUENCE} + trigger \texttt{BEFORE INSERT}.
+
+\bloqueSolucion
+
+\textit{MySQL 8+:}
 
 \begin{lstlisting}
 CREATE DATABASE IF NOT EXISTS practico1b_mysql;
@@ -338,9 +382,7 @@ CREATE TABLE estacionamiento (
 );
 \end{lstlisting}
 
-\itemcabecera{DDL en Oracle XE 10g/11g}
-
-En Oracle no existe el concepto de ``base de datos'' como en MySQL o PostgreSQL: el equivalente práctico es crear un usuario que oficie de esquema dueño de las tablas. Por eso, el primer paso es conectarse como administrador y crear el usuario:
+\textit{Oracle XE 10g/11g:} primero, como administrador, se crea el usuario que actúa como esquema:
 
 \begin{lstlisting}
 CREATE USER practico1b IDENTIFIED BY practico1b;
@@ -348,7 +390,7 @@ GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE, CREATE TRIGGER TO practico1
 ALTER USER practico1b QUOTA UNLIMITED ON USERS;
 \end{lstlisting}
 
-Una vez conectado como \texttt{practico1b}:
+Luego, ya como \texttt{practico1b}:
 
 \begin{lstlisting}
 CREATE TABLE persona (
@@ -423,18 +465,113 @@ END;
 /
 \end{lstlisting}
 
-\subsection{Inciso c) Clientes, automóviles, talleres y accidentes}
-
-\itemcabecera{Decisiones de modelado}
+\bloquePorque
 
 \begin{itemize}
-    \item \texttt{cliente.dni}, \texttt{automovil.patente}, \texttt{categoria.nro\_categoria}, \texttt{taller.nro\_taller} y \texttt{accidente.nro\_accidente} son las claves primarias.
-    \item Aunque el enunciado solo declara explícitamente las FK de \texttt{accidente}, también se incluyen \texttt{automovil.dni $\rightarrow$ cliente(dni)} y \texttt{automovil.nro\_categoria $\rightarrow$ categoria(nro\_categoria)} porque cierran la integridad referencial del modelo.
-    \item Para cumplir con el pedido de eliminar la información de los accidentes asociados al borrar un cliente, se propaga la cascada en \texttt{automovil.dni} y \texttt{accidente.dni}. Así, un único \texttt{DELETE} sobre \texttt{cliente} elimina todo lo relacionado.
-    \item Las restricciones de dominio se traducen en \texttt{CHECK}: \texttt{modelo BETWEEN 1990 AND 2015}, \texttt{marca IN ('FIAT', 'RENAULT', 'FORD')} y \texttt{tarifa > 0 AND tarifa < 10000}.
+    \item \texttt{duenio} resuelve la N:N entre vehículos y personas con PK compuesta \texttt{(patente, dni)}; las dos FK usan \texttt{CASCADE} para que al borrar una persona o un vehículo desaparezcan las titularidades asociadas, sin tocar el resto del modelo.
+    \item Para impedir borrar un vehículo que fue estacionado, la FK \texttt{estacionamiento.patente} se deja con el comportamiento por defecto (\texttt{NO ACTION}/\texttt{RESTRICT}); si hay estacionamientos vinculados, el motor aborta el \texttt{DELETE}.
+    \item El dominio del color usa \texttt{ENUM} en MySQL y \texttt{CHECK (LOWER(color) IN (...))} en Oracle. El dominio del nombre y apellido (\texttt{VARCHAR(45)}) se aplica directamente sobre la columna, ya que ni MySQL ni Oracle soportan \texttt{CREATE DOMAIN}.
+    \item La autonumeración del \texttt{id\_estacionamiento} es \texttt{AUTO\_INCREMENT} en MySQL; en Oracle 10/11 XE se combina una \texttt{SEQUENCE} con un trigger \texttt{BEFORE INSERT} que asigna el siguiente valor solo cuando el insert no lo proporciona (en Oracle 12+ existe \texttt{GENERATED AS IDENTITY}, pero la cátedra apunta a 10/11).
+    \item \texttt{UNIQUE (calle, altura)} en \texttt{parquimetro} evita dos parquímetros distintos con la misma ubicación física.
 \end{itemize}
 
-\itemcabecera{DDL en PostgreSQL 14+}
+% -----------------------------------------------------
+\subsection{Inciso c) Clientes, automóviles, talleres y accidentes}
+
+\bloqueConsigna
+
+Dado el siguiente esquema:
+
+\begin{esquema}
+Cliente (\underline{DNI}, nombre, apellido, direcci\'on, tarifa)\\
+Automovil (\underline{patente}, marca, modelo, dni, nro\_categoria)\\
+Categor\'ia (\underline{nro\_categoria}, tasa)\\
+Taller (\underline{nro\_taller}, nombre, direcci\'on)\\
+Accidente (\underline{nro\_accidente}, DNI, patente, nro\_taller, fecha, costo)\\[4pt]
+\hspace*{1em} DNI clave for\'anea que referencia DNI de Cliente\\
+\hspace*{1em} nro\_taller clave for\'anea que referencia nro\_taller de Taller\\
+\hspace*{1em} patente clave for\'anea que referencia patente de Autom\'ovil
+\end{esquema}
+
+Considerar que el modelo de un automóvil es un entero positivo entre 1990 y 2015. El atributo marca de un automóvil puede ser \{FIAT, RENAULT, FORD\}. El atributo tarifa es un entero positivo menos a 10000. Tener en cuenta al borrar un cliente debe eliminarse toda la información de los accidentes que lo involucran.
+
+\textbf{Nota:} Resolver utilizando los motores de PostgreSQL y ORACLE.
+
+\bloqueIdea
+
+El enunciado declara las FK ``visibles'' de \texttt{accidente}, pero \texttt{automovil.dni} y \texttt{automovil.nro\_categoria} también necesitan ser FK para mantener integridad referencial. La regla ``al borrar un cliente, borrar sus accidentes'' se modela cascadeando desde \texttt{cliente} hacia \texttt{automovil} y \texttt{accidente}, de modo que un solo \texttt{DELETE} sobre \texttt{cliente} dispare la limpieza completa.
+
+\bloqueSolucion
+
+Aunque la cátedra solo pide PostgreSQL y Oracle para este inciso, el DDL se traduce sin pérdida a MySQL 8+: todas las restricciones (\texttt{CHECK} sobre rangos, dominios por enumeración con \texttt{IN (...)} y FK con \texttt{ON DELETE CASCADE}) están soportadas. Por eso se incluye también la versión MySQL.
+
+\textit{MySQL 8+:}
+
+\begin{lstlisting}
+CREATE DATABASE IF NOT EXISTS practico1c_mysql;
+USE practico1c_mysql;
+
+CREATE TABLE cliente (
+    dni BIGINT PRIMARY KEY,
+    nombre VARCHAR(60) NOT NULL,
+    apellido VARCHAR(60) NOT NULL,
+    direccion VARCHAR(120) NOT NULL,
+    tarifa INT NOT NULL,
+    CONSTRAINT ck_cliente_tarifa CHECK (tarifa > 0 AND tarifa < 10000)
+);
+
+CREATE TABLE categoria (
+    nro_categoria INT PRIMARY KEY,
+    tasa DECIMAL(6,2) NOT NULL,
+    CONSTRAINT ck_categoria_tasa CHECK (tasa > 0)
+);
+
+CREATE TABLE taller (
+    nro_taller INT PRIMARY KEY,
+    nombre VARCHAR(80) NOT NULL,
+    direccion VARCHAR(120) NOT NULL
+);
+
+CREATE TABLE automovil (
+    patente VARCHAR(10) PRIMARY KEY,
+    marca VARCHAR(10) NOT NULL,
+    modelo INT NOT NULL,
+    dni BIGINT NOT NULL,
+    nro_categoria INT NOT NULL,
+    CONSTRAINT ck_automovil_modelo CHECK (modelo BETWEEN 1990 AND 2015),
+    CONSTRAINT ck_automovil_marca CHECK (marca IN ('FIAT', 'RENAULT', 'FORD')),
+    CONSTRAINT fk_automovil_cliente
+        FOREIGN KEY (dni)
+        REFERENCES cliente(dni)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_automovil_categoria
+        FOREIGN KEY (nro_categoria)
+        REFERENCES categoria(nro_categoria)
+);
+
+CREATE TABLE accidente (
+    nro_accidente INT PRIMARY KEY,
+    dni BIGINT NOT NULL,
+    patente VARCHAR(10) NOT NULL,
+    nro_taller INT NOT NULL,
+    fecha DATE NOT NULL,
+    costo DECIMAL(12,2) NOT NULL,
+    CONSTRAINT ck_accidente_costo CHECK (costo > 0),
+    CONSTRAINT fk_accidente_cliente
+        FOREIGN KEY (dni)
+        REFERENCES cliente(dni)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_accidente_automovil
+        FOREIGN KEY (patente)
+        REFERENCES automovil(patente)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_accidente_taller
+        FOREIGN KEY (nro_taller)
+        REFERENCES taller(nro_taller)
+);
+\end{lstlisting}
+
+\textit{PostgreSQL 14+:}
 
 \begin{lstlisting}
 CREATE SCHEMA IF NOT EXISTS practico1c;
@@ -500,7 +637,7 @@ CREATE TABLE accidente (
 );
 \end{lstlisting}
 
-\itemcabecera{DDL en Oracle XE 10g/11g}
+\textit{Oracle XE 10g/11g:}
 
 \begin{lstlisting}
 CREATE USER practico1c IDENTIFIED BY practico1c;
@@ -508,7 +645,7 @@ GRANT CREATE SESSION, CREATE TABLE TO practico1c;
 ALTER USER practico1c QUOTA UNLIMITED ON USERS;
 \end{lstlisting}
 
-Y luego, ya como \texttt{practico1c}, se ejecuta el DDL:
+Y luego, ya como \texttt{practico1c}:
 
 \begin{lstlisting}
 CREATE TABLE cliente (
@@ -571,14 +708,32 @@ CREATE TABLE accidente (
 );
 \end{lstlisting}
 
+\bloquePorque
+
+\begin{itemize}
+    \item \texttt{cliente} es la entidad raíz: la cascada \texttt{cliente $\to$ automovil $\to$ accidente} (más \texttt{cliente $\to$ accidente} directamente) garantiza que un único \texttt{DELETE FROM cliente WHERE dni = ...} elimine en limpio toda la información asociada, tal como pide el enunciado.
+    \item \texttt{accidente.nro\_taller} usa el comportamiento por defecto (\texttt{RESTRICT}): borrar un taller con accidentes registrados se prohíbe, porque la traza queda atada al taller.
+    \item Los dominios se traducen en \texttt{CHECK}: \texttt{modelo BETWEEN 1990 AND 2015}, \texttt{marca IN ('FIAT', 'RENAULT', 'FORD')} y \texttt{tarifa > 0 AND tarifa < 10000} reflejan exactamente las restricciones del enunciado.
+    \item \texttt{tarifa} se declara \texttt{INTEGER} porque el enunciado habla de ``entero positivo''; el \texttt{CHECK} cubre el rango \texttt{(0, 10000)} excluyendo el cero.
+\end{itemize}
+
 % =====================================================
 % Ejercicio 2
 % =====================================================
 \section{Ejercicio 2: Carga de datos}
 
-Las inserciones se eligen de manera tal que cada consulta del Ejercicio 3 devuelva un resultado significativo y que las restricciones definidas (claves, dominios, integridad referencial) realmente entren en juego. Concretamente, en el inciso a) se incluye un cliente sin facturas, en el inciso b) se reparten estacionamientos sobre el parquímetro 9 y en el inciso c) se carga un cliente con cuatro accidentes.
+\bloqueConsigna
 
+Utilizando SQL, agregar datos coherentes a las bases de datos creadas en los incisos del ejercicio anterior.
+
+\bloqueIdea
+
+Es \texttt{INSERT} puro, pero los datos no son arbitrarios: tienen que respetar todas las restricciones del DDL (claves, dominios, integridad referencial) y dejar el estado preparado para que cada consulta del Ejercicio 3 devuelva un resultado significativo. Concretamente, en \texttt{1.a} se carga un cliente sin facturas, en \texttt{1.b} se reparten estacionamientos sobre el parquímetro 9, y en \texttt{1.c} se carga un cliente con cuatro accidentes para que \texttt{HAVING COUNT(*) > 3} matchee.
+
+% -----------------------------------------------------
 \subsection{Inciso a) -- MySQL/PostgreSQL}
+
+\bloqueSolucion
 
 \begin{lstlisting}
 INSERT INTO cliente (nro_cliente, apellido, nombre, direccion, telefono) VALUES
@@ -609,15 +764,18 @@ INSERT INTO item_factura (cod_producto, nro_factura, cantidad, precio) VALUES
     (102, 1004, 1, 8000.00);
 \end{lstlisting}
 
-\itemcabecera{Qué valida esta carga}
+\bloquePorque
 
 \begin{itemize}
-    \item Diego Luna queda intencionalmente sin facturas, así aparece en la consulta de clientes sin ventas.
-    \item Andrés Pérez tiene dos facturas con montos distintos, lo que permite ver con claridad el \texttt{MAX} y el \texttt{MIN} por cliente.
-    \item Los montos declarados en cada factura coinciden con la suma de los precios y cantidades de sus ítems.
+    \item Diego Luna queda intencionalmente sin facturas, para que aparezca en la consulta de clientes sin ventas (3.a).
+    \item Andrés Pérez tiene dos facturas con montos distintos, lo que hace que \texttt{MAX} y \texttt{MIN} por cliente devuelvan valores diferenciados (3.d).
+    \item Los montos declarados en cada factura coinciden con la suma de \texttt{cantidad * precio} de sus ítems, así no aparece inconsistencia conceptual entre las dos tablas.
 \end{itemize}
 
+% -----------------------------------------------------
 \subsection{Inciso b) -- MySQL}
+
+\bloqueSolucion
 
 \begin{lstlisting}
 INSERT INTO persona (dni, nombre_y_apellido, direccion) VALUES
@@ -649,9 +807,20 @@ VALUES
     ('AA123BB', 11, '2024-08-04', 1350.00, 1250.00, '16:00:00', '16:50:00');
 \end{lstlisting}
 
+\bloquePorque
+
+\begin{itemize}
+    \item Hay dos vehículos distintos (\texttt{AA123BB} y \texttt{AC456DD}) que pasaron por el parquímetro 9, así la consulta 3.b devuelve más de una fila.
+    \item Todos los \texttt{INSERT} respetan el dominio del color (\texttt{ENUM('gris', 'negro', 'azul')}) y la restricción \texttt{altura BETWEEN 0 AND 5000}.
+    \item No se insertan valores para \texttt{id\_estacionamiento}: lo asigna el \texttt{AUTO\_INCREMENT}.
+\end{itemize}
+
+% -----------------------------------------------------
 \subsection{Inciso b) -- Oracle}
 
-En Oracle se omite la columna \texttt{id\_estacionamiento} en el \texttt{INSERT}, ya que el trigger \texttt{trg\_estacionamiento\_bi} se encarga de tomar el siguiente valor de la secuencia y completar el campo.
+En Oracle se omite \texttt{id\_estacionamiento} en el \texttt{INSERT}: el trigger \texttt{trg\_estacionamiento\_bi} se encarga de tomar el siguiente valor de \texttt{seq\_estacionamiento}.
+
+\bloqueSolucion
 
 \begin{lstlisting}
 INSERT INTO persona (dni, nombre_y_apellido, direccion)
@@ -697,7 +866,20 @@ VALUES ('AA123BB', 11, DATE '2024-08-04', 1350.00, 1250.00,
         TIMESTAMP '2024-08-04 16:00:00', TIMESTAMP '2024-08-04 16:50:00');
 \end{lstlisting}
 
-\subsection{Inciso c) -- PostgreSQL}
+\bloquePorque
+
+\begin{itemize}
+    \item Oracle 10/11 no acepta \texttt{INSERT ... VALUES (...), (...)} con múltiples filas como MySQL/PostgreSQL: cada fila va en su propio \texttt{INSERT}.
+    \item Las fechas y horas se escriben con los literales \texttt{DATE '...'} y \texttt{TIMESTAMP '...'} para que Oracle las parsee sin depender del \texttt{NLS\_DATE\_FORMAT} de la sesión.
+    \item El \texttt{CHECK (LOWER(color) IN (...))} permite cargar el color en minúsculas tal como se hace aquí.
+\end{itemize}
+
+% -----------------------------------------------------
+\subsection{Inciso c) -- MySQL/PostgreSQL}
+
+\bloqueSolucion
+
+El mismo bloque de \texttt{INSERT} corre sin cambios en MySQL 8+ (\texttt{practico1c\_mysql}) y en PostgreSQL 14+ (\texttt{practico1c}): la sintaxis multi-fila con \texttt{VALUES (...), (...)} está soportada por ambos.
 
 \begin{lstlisting}
 INSERT INTO cliente (dni, nombre, apellido, direccion, tarifa) VALUES
@@ -719,6 +901,8 @@ INSERT INTO automovil (patente, marca, modelo, dni, nro_categoria) VALUES
     ('BBB222', 'FORD', 2012, 30111222, 2),
     ('CCC333', 'RENAULT', 2015, 28999111, 1),
     ('DDD444', 'FIAT', 2008, 33444555, 3);
+-- TODO: el enunciado pide modelo entre 1990 y 2015; 'DDD444' modelo 2008 cumple,
+-- pero conviene revisar si todos los autos de prueba deben estar dentro del rango.
 
 INSERT INTO accidente (nro_accidente, dni, patente, nro_taller, fecha, costo) VALUES
     (5001, 30111222, 'AAA111', 1, '2024-01-10', 150000.00),
@@ -729,11 +913,12 @@ INSERT INTO accidente (nro_accidente, dni, patente, nro_taller, fecha, costo) VA
     (5006, 33444555, 'DDD444', 1, '2024-08-09', 110000.00);
 \end{lstlisting}
 
-\itemcabecera{Qué valida esta carga}
+\bloquePorque
 
 \begin{itemize}
-    \item Lucas Gómez aparece con cuatro accidentes, lo que asegura que la consulta del inciso c) del Ejercicio 3 (con \texttt{HAVING COUNT(*) > 3}) devuelva al menos una fila.
-    \item Todas las marcas y modelos respetan los dominios definidos en el DDL, por lo que ningún \texttt{INSERT} es rechazado por los \texttt{CHECK}.
+    \item Lucas Gómez (DNI 30111222) aparece con cuatro accidentes, lo que garantiza al menos una fila en la consulta 3.c (\texttt{HAVING COUNT(*) > 3}).
+    \item Todas las marcas (\texttt{FIAT}, \texttt{FORD}, \texttt{RENAULT}) y modelos respetan los dominios definidos, así que ningún \texttt{INSERT} es rechazado por los \texttt{CHECK}.
+    \item Las tarifas (\texttt{3500}, \texttt{4200}, \texttt{2800}) están dentro del rango \texttt{(0, 10000)} pedido.
 \end{itemize}
 
 % =====================================================
@@ -741,11 +926,28 @@ INSERT INTO accidente (nro_accidente, dni, patente, nro_taller, fecha, costo) VA
 % =====================================================
 \section{Ejercicio 3: Consultas SQL y álgebra relacional}
 
-Este ejercicio se centra en las consultas DML del repaso: filtros con \texttt{WHERE}, ordenamientos con \texttt{ORDER BY}, agregaciones con \texttt{GROUP BY}/\texttt{HAVING} y subconsultas. Las cuatro primeras consultas son las pedidas por el enunciado y la última corresponde a la parte de álgebra relacional.
+\bloqueConsigna
 
+Utilizando las bases de datos creadas en los incisos del ejercicio 1, resolver las siguientes consultas:
+
+\bloqueIdea
+
+Cinco consultas que cubren los temas centrales del DML: filtrado con \texttt{WHERE}, ordenamiento con \texttt{ORDER BY}, joins, agregación con \texttt{GROUP BY}/\texttt{HAVING}, subconsultas correlacionadas y, en el último inciso, traducción entre álgebra relacional y SQL.\footnote{En el PDF original, el segundo ítem del Ejercicio 3 figura etiquetado como ``d)'' cuando por contexto debería ser ``b)''. Se conserva la numeración del PDF en la transcripción de cada consigna, pero se identifica acá como 3.b para que el índice quede legible.}
+
+\textbf{Portabilidad entre motores.} Todas las queries de los incisos 3.a a 3.d están escritas en SQL estándar (\texttt{SELECT}, \texttt{JOIN ... ON}, \texttt{WHERE}, \texttt{GROUP BY}, \texttt{HAVING}, \texttt{ORDER BY}, \texttt{DISTINCT}, \texttt{NOT EXISTS}, \texttt{MAX}/\texttt{MIN}/\texttt{COUNT}) y corren sin cambios en MySQL 8+, PostgreSQL 14+ y Oracle 10/11 XE; por eso se muestra una sola versión por consulta. La única excepción aparece en 3.e Consulta 2, donde el operador algebraico $\cap$ se traduciría a \texttt{INTERSECT}: PostgreSQL y Oracle lo soportan desde siempre, pero MySQL recién lo agregó en 8.0.31; por compatibilidad se resuelve con \texttt{JOIN + DISTINCT} (equivalente semántico).
+
+% -----------------------------------------------------
 \subsection{a) Clientes sin ventas (base del inciso 1.a)}
 
-El enunciado pide listar los clientes (con todos sus datos) que no tengan ninguna factura asociada, ordenando el resultado por apellido y nombre en forma descendente.
+\bloqueConsigna
+
+(bases de datos del inciso 1 a) Listar los clientes (todos sus datos) que no se le han realizado ninguna venta (clientes que no tienen ninguna factura asociada). Al listado ordenarlo por apellido y nombre en forma descendente.
+
+\bloqueIdea
+
+Hay que devolver los clientes \emph{huérfanos}: los que existen en \texttt{cliente} pero no aparecen en \texttt{factura}. El patrón canónico para esto es una subconsulta correlacionada con \texttt{NOT EXISTS}, que se lee literalmente como ``no existe ninguna factura asociada a este cliente''.
+
+\bloqueSolucion
 
 \begin{lstlisting}
 SELECT c.nro_cliente,
@@ -762,13 +964,27 @@ WHERE NOT EXISTS (
 ORDER BY c.apellido DESC, c.nombre DESC;
 \end{lstlisting}
 
-\itemcabecera{Idea}
+\bloquePorque
 
-La consulta se modela naturalmente con una subconsulta correlacionada: \texttt{NOT EXISTS} se lee literalmente como ``no existe ninguna factura asociada a este cliente''. Es una formulación equivalente a un \texttt{LEFT JOIN ... WHERE factura.nro\_cliente IS NULL} o a \texttt{WHERE nro\_cliente NOT IN (...)}, pero se comporta correctamente frente a posibles \texttt{NULL} y suele ser la opción más limpia. Sobre los datos del Ejercicio 2, el resultado esperado es Diego Luna, único cliente sin facturas.
+\begin{itemize}
+    \item El \texttt{FROM cliente c} recorre todos los clientes; el \texttt{NOT EXISTS} descarta los que tienen al menos una factura.
+    \item Se prefiere \texttt{NOT EXISTS} a \texttt{NOT IN (SELECT nro\_cliente FROM factura)} porque, si alguna factura tuviera \texttt{nro\_cliente NULL}, \texttt{NOT IN} devolvería el conjunto vacío (consecuencia de la lógica trivaluada). \texttt{NOT EXISTS} es robusto frente a esos casos.
+    \item El \texttt{ORDER BY c.apellido DESC, c.nombre DESC} aplica el desempate por \texttt{nombre} solo cuando dos clientes comparten apellido.
+    \item Con los datos del Ejercicio 2 la consulta devuelve a Diego Luna, único cliente sin facturas.
+\end{itemize}
 
+% -----------------------------------------------------
 \subsection{b) Vehículos que usaron el parquímetro 9 (base del inciso 1.b)}
 
-El enunciado pide indicar modelo y color de los vehículos que utilizaron el parquímetro 9. Se incluye también la patente para identificar inequívocamente cada vehículo, ya que sin ella podrían aparecer filas que parezcan repetidas (mismo modelo y color, pero autos distintos).
+\bloqueConsigna
+
+(bases de datos del inciso 1 b) Listar los vehículos que utilizaron el parquímetro 9, indicar modelo y color.
+
+\bloqueIdea
+
+Es un join clásico entre la tabla de hechos (\texttt{estacionamiento}, donde están los registros de uso) y la tabla de entidades (\texttt{vehiculo}, donde están modelo y color), filtrando por \texttt{id\_parquimetro = 9}. El detalle a cuidar es la deduplicación: un mismo vehículo puede haberse estacionado varias veces en el parquímetro 9.
+
+\bloqueSolucion
 
 \begin{lstlisting}
 SELECT DISTINCT v.patente,
@@ -780,11 +996,27 @@ JOIN estacionamiento e
 WHERE e.id_parquimetro = 9;
 \end{lstlisting}
 
-\itemcabecera{Idea}
+\bloquePorque
 
-La consulta cruza \texttt{vehiculo} con \texttt{estacionamiento} por la patente y filtra los registros del parquímetro 9. El \texttt{DISTINCT} es importante porque un mismo vehículo puede haberse estacionado allí en varias ocasiones; sin él, cada estacionamiento generaría una fila duplicada en el resultado. Con los datos cargados, las patentes \texttt{AA123BB} y \texttt{AC456DD} aparecen en el listado.
+\begin{itemize}
+    \item El \texttt{JOIN} cruza \texttt{vehiculo} con \texttt{estacionamiento} por la patente, conservando solo las filas con un estacionamiento real.
+    \item El \texttt{WHERE e.id\_parquimetro = 9} filtra antes de la deduplicación, así el join trabaja solo con los registros relevantes.
+    \item El \texttt{DISTINCT} elimina filas duplicadas que aparecerían si un vehículo se estacionó más de una vez en el parquímetro 9.
+    \item Se incluye la \texttt{patente} junto a modelo y color, para distinguir vehículos distintos que casualmente compartan ambas características.
+\end{itemize}
 
+% -----------------------------------------------------
 \subsection{c) Clientes con más de 3 accidentes (base del inciso 1.c)}
+
+\bloqueConsigna
+
+(bases de datos del inciso 1 c) Listar los clientes cuya cantidad de accidentes que tuvieron es superior a 3. Listar DNI, nombre y apellido.
+
+\bloqueIdea
+
+Es un caso típico de agregación con filtro posterior: agrupar accidentes por cliente, contar y quedarse solo con los grupos cuyo conteo es mayor a 3. La distinción clave entre \texttt{WHERE} y \texttt{HAVING} aparece exactamente aquí: \texttt{HAVING} se aplica después del \texttt{GROUP BY}, sobre los grupos, no sobre las filas originales.
+
+\bloqueSolucion
 
 \begin{lstlisting}
 SELECT c.dni,
@@ -797,11 +1029,27 @@ GROUP BY c.dni, c.nombre, c.apellido
 HAVING COUNT(*) > 3;
 \end{lstlisting}
 
-\itemcabecera{Idea}
+\bloquePorque
 
-Es un caso típico de agregación con filtro posterior. \texttt{GROUP BY} arma un grupo por cada cliente y \texttt{HAVING COUNT(*) > 3} deja solo aquellos cuyos accidentes superan los tres. La diferencia clave con \texttt{WHERE} es que \texttt{HAVING} se aplica sobre filas ya agrupadas, que es exactamente lo que se necesita aquí. Con la carga del Ejercicio 2, el único cliente que cumple es Lucas Gómez, que registra cuatro accidentes.
+\begin{itemize}
+    \item El \texttt{JOIN} encadena cada accidente con su cliente; el resultado intermedio tiene una fila por accidente.
+    \item El \texttt{GROUP BY c.dni, c.nombre, c.apellido} colapsa todas las filas de un mismo cliente en un solo grupo. Se agrupa por las tres columnas porque en SQL estándar y en PostgreSQL todas las columnas no agregadas del \texttt{SELECT} deben aparecer en el \texttt{GROUP BY}.
+    \item \texttt{HAVING COUNT(*) > 3} se aplica sobre los grupos ya armados: no se podría usar \texttt{WHERE COUNT(*) > 3} porque \texttt{WHERE} se evalúa antes de la agregación.
+    \item Con los datos cargados, el único cliente que cumple es Lucas Gómez, que tiene cuatro accidentes.
+\end{itemize}
 
+% -----------------------------------------------------
 \subsection{d) Máximo y mínimo monto de factura por cliente (base del inciso 1.a)}
+
+\bloqueConsigna
+
+(bases de datos del inciso 1 a) Obtener el máximo y mínimo precio de montos pagados en las facturas por cada cliente. Listar Nro\_cliente, nombre y máximo y mínimo monto de factura.
+
+\bloqueIdea
+
+Otra agregación: por cada cliente, calcular \texttt{MAX(monto)} y \texttt{MIN(monto)} sobre sus facturas. El \texttt{JOIN} interno se encarga de descartar a los clientes sin facturas, para los que no tendría sentido un máximo o un mínimo.
+
+\bloqueSolucion
 
 \begin{lstlisting}
 SELECT c.nro_cliente,
@@ -816,17 +1064,37 @@ GROUP BY c.nro_cliente, c.nombre, c.apellido
 ORDER BY c.nro_cliente;
 \end{lstlisting}
 
-\itemcabecera{Idea}
+\bloquePorque
 
-Las funciones \texttt{MAX} y \texttt{MIN} aplicadas sobre \texttt{monto} resuelven directamente el pedido. Como la consulta utiliza un join interno, solo aparecen los clientes con al menos una factura. Esto es deseable: un cliente sin facturas no tiene un máximo ni un mínimo bien definido y, además, su caso ya se cubre en el inciso a). El \texttt{ORDER BY c.nro\_cliente} es un detalle de presentación para que el listado quede ordenado de forma estable.
+\begin{itemize}
+    \item El \texttt{JOIN} interno (\texttt{cliente JOIN factura}) se queda solo con los clientes que tienen al menos una factura; un \texttt{LEFT JOIN} dejaría a Diego Luna en el listado con \texttt{NULL} en ambas agregaciones.
+    \item \texttt{GROUP BY} arma un grupo por cliente; \texttt{MAX} y \texttt{MIN} se calculan dentro de cada grupo.
+    \item Se agrega \texttt{c.apellido} al \texttt{SELECT} y al \texttt{GROUP BY} para que el listado sea legible aunque el enunciado solo mencione ``nombre''; al ser una columna funcionalmente dependiente del \texttt{nro\_cliente}, incluirla no altera los grupos.
+    \item Con los datos cargados, Andrés Pérez es el caso ilustrativo: máximo \$450.000 y mínimo \$106.000.
+\end{itemize}
 
+% -----------------------------------------------------
 \subsection{e) Tres consultas en álgebra relacional}
 
-Para esta parte se elige como dominio la base del inciso 1.a, porque sus relaciones son simples y permiten ilustrar con claridad cada operador. Entre las tres consultas se cubren los operadores que pide el enunciado: selección, proyección, unión, intersección y producto cartesiano.
+\bloqueConsigna
+
+Proponer y resolver utilizando el álgebra relacional al menos 3 consultas sobre la base de datos que usted desee. Los siguientes operadores: \textbf{selección, proyección, unión, intersección y producto cartesiano}; deben participar en al menos una consulta.
+
+\bloqueIdea
+
+Se elige como base el inciso 1.a porque sus relaciones son simples y permiten ilustrar cada operador en una expresión corta. Entre las tres consultas se cubren los cinco operadores pedidos: selección ($\sigma$), proyección ($\pi$), unión ($\cup$), intersección ($\cap$) y producto cartesiano ($\times$). Cada consulta se da primero en notación algebraica y después en SQL equivalente.
 
 \subsubsection*{Consulta 1 --- Productos con stock por debajo o igual al mínimo}
 
-Esta consulta detecta productos que necesitan reposición. Se utiliza una unión de dos selecciones para ejemplificar el operador $\cup$, aunque podría escribirse con un único \texttt{WHERE cantidad <= stock\_minimo}.
+\bloqueConsigna
+
+Listar los productos cuyo stock disponible está por debajo del mínimo, o exactamente en el mínimo (es decir, los que necesitan reposición).
+
+\bloqueIdea
+
+Se construye con una unión de dos selecciones, una por cada condición (\texttt{<} y \texttt{=}). Es una forma artificial de ilustrar $\cup$: en un caso real se escribiría con un único \texttt{<=}.
+
+\bloqueSolucion
 
 \textit{Álgebra relacional:}
 
@@ -850,11 +1118,25 @@ FROM producto
 WHERE cantidad = stock_minimo;
 \end{lstlisting}
 
-\textit{Operadores usados:} selección, proyección y unión.
+\bloquePorque
 
-\subsubsection*{Consulta 2 --- Productos facturados por debajo del stock máximo}
+\begin{itemize}
+    \item Cada subconsulta proyecta \texttt{(cod\_producto, descripcion)} después de aplicar su selección.
+    \item \texttt{UNION} (sin \texttt{ALL}) ya elimina duplicados, igual que el $\cup$ algebraico, que trabaja con conjuntos.
+    \item Operadores usados: selección ($\sigma$), proyección ($\pi$) y unión ($\cup$).
+\end{itemize}
 
-La consulta combina la información del registro de ventas (\texttt{ItemFactura}) con la del catálogo (\texttt{Producto}) para identificar productos que ya tuvieron movimiento pero todavía conservan capacidad de stock.
+\subsubsection*{Consulta 2 --- Productos facturados con stock por debajo del máximo}
+
+\bloqueConsigna
+
+Listar los productos que aparecen en al menos una factura y al mismo tiempo todavía tienen capacidad de stock (es decir, su \texttt{cantidad} es menor al \texttt{stock\_maximo}).
+
+\bloqueIdea
+
+Se modela como intersección entre dos conjuntos de \texttt{cod\_producto}: los que figuran en \texttt{ItemFactura} y los que cumplen \texttt{cantidad < stock\_maximo} en \texttt{Producto}.
+
+\bloqueSolucion
 
 \textit{Álgebra relacional:}
 
@@ -874,11 +1156,26 @@ JOIN producto p
 WHERE p.cantidad < p.stock_maximo;
 \end{lstlisting}
 
-\textit{Operadores usados:} selección, proyección e intersección. En SQL se utiliza un \texttt{JOIN} con \texttt{DISTINCT} porque modela exactamente la intersección sobre el conjunto de códigos de producto que cumplen ambas condiciones.
+\bloquePorque
 
-\subsubsection*{Consulta 3 --- Pares cliente-factura a partir del producto cartesiano}
+\begin{itemize}
+    \item El \texttt{JOIN} cruza ítems y productos; el \texttt{WHERE} aplica la selección sobre el lado del catálogo.
+    \item \texttt{DISTINCT} replica la semántica de conjuntos del operador de intersección: un producto facturado en varias filas aparece una sola vez.
+    \item Equivale a \texttt{SELECT cod\_producto FROM item\_factura INTERSECT SELECT cod\_producto FROM producto WHERE cantidad < stock\_maximo} en motores que soportan \texttt{INTERSECT} (PostgreSQL sí, MySQL no hasta 8.0.31).
+    \item Operadores usados: selección, proyección e intersección.
+\end{itemize}
 
-Esta consulta sirve para ilustrar el operador de producto cartesiano. El producto entre \texttt{Cliente} y \texttt{Factura} genera todas las combinaciones posibles, y la selección posterior se queda solo con los pares que coinciden por \texttt{nro\_cliente}. Esa combinación de operadores es, conceptualmente, lo que un join interno hace por debajo.
+\subsubsection*{Consulta 3 --- Pares cliente-factura vía producto cartesiano}
+
+\bloqueConsigna
+
+Listar el par (cliente, factura) para cada factura del sistema, reconstruido a partir del producto cartesiano $\texttt{Cliente} \times \texttt{Factura}$ y la selección posterior por igualdad de \texttt{nro\_cliente}.
+
+\bloqueIdea
+
+Es la definición ``de manual'' del join: producto cartesiano más selección. Sirve para mostrar cómo un \texttt{JOIN ... ON} de SQL se descompone en operadores algebraicos primitivos.
+
+\bloqueSolucion
 
 \textit{Álgebra relacional:}
 
@@ -901,15 +1198,21 @@ JOIN factura f
   ON c.nro_cliente = f.nro_cliente;
 \end{lstlisting}
 
-\textit{Operadores usados:} producto cartesiano, selección y proyección.
+\bloquePorque
+
+\begin{itemize}
+    \item \texttt{Cliente $\times$ Factura} produce todas las combinaciones posibles; la $\sigma$ posterior conserva solo las que coinciden por \texttt{nro\_cliente}, que es exactamente lo que define un \texttt{INNER JOIN} natural por esa columna.
+    \item La proyección final descarta columnas innecesarias y deja un listado limpio.
+    \item Operadores usados: producto cartesiano ($\times$), selección y proyección.
+\end{itemize}
 
 % =====================================================
 % Conclusión
 % =====================================================
 \section{Conclusión}
 
-El práctico permitió repasar de forma integral las construcciones más usadas de SQL: definición de tablas con sus restricciones, carga de datos coherente con el modelo y consultas que cubren desde filtros simples hasta agregaciones y subconsultas correlacionadas. También obligó a confrontar diferencias prácticas entre motores, en particular cómo emular dominios cuando el motor no soporta \texttt{CREATE DOMAIN} y cómo implementar autonumeración en Oracle 10g/11g XE mediante secuencias y triggers.
+El práctico repasó las construcciones más usadas de SQL: DDL con restricciones (PK, UNIQUE, FK, CHECK, acciones referenciales), DML para cargar datos coherentes con el modelo y consultas que cubren desde filtros simples hasta agregaciones, subconsultas correlacionadas y la traducción de álgebra relacional a SQL.
 
-Las decisiones de modelado se justificaron a partir del enunciado, manteniendo consistencia entre los tres incisos y respetando las reglas de borrado pedidas. La carga de datos se diseñó pensando en las consultas posteriores, lo que facilitó verificar que las restricciones se aplican correctamente y que las consultas devuelven resultados representativos. La parte de álgebra relacional permitió pensar las consultas en términos de operadores formales y traducirlas a SQL, recuperando la conexión entre el modelo teórico y la práctica.
+También obligó a confrontar diferencias prácticas entre motores: cómo emular dominios cuando no existe \texttt{CREATE DOMAIN} (MySQL/Oracle), cómo implementar autonumeración en Oracle 10/11 XE con secuencias y triggers, y cuándo conviene cada motor para qué tipo de inciso. Las cargas del Ejercicio 2 se diseñaron específicamente para que las consultas del Ejercicio 3 devuelvan resultados visibles, lo que permite verificar tanto la corrección de las restricciones como la de las queries.
 
 \end{document}

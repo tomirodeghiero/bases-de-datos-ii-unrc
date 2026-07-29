@@ -40,7 +40,66 @@
 \definecolor{noteframe}{RGB}{220,180,80}
 
 \usepackage{listings}
+
+% Estilo para mongosh (JavaScript)
 \lstdefinestyle{jsstyle}{
+    language=Java,
+    morekeywords={db,find,aggregate,insertOne,insertMany,updateOne,updateMany,deleteMany,countDocuments,createIndex,createCollection,dropDatabase,use,let,const,function},
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2,
+    morecomment=[l]{//}
+}
+
+% Estilo para SQL (MySQL JSON)
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={JSON,JSON\_OBJECT,JSON\_ARRAY,JSON\_ARRAYAGG,JSON\_OBJECTAGG,
+        JSON\_EXTRACT,JSON\_VALUE,JSON\_UNQUOTE,JSON\_CONTAINS,
+        JSON\_SET,JSON\_TABLE,JSON\_TYPE,JSON\_LENGTH,SUBSTRING\_INDEX,
+        VIRTUAL,STORED,GENERATED,ALWAYS,AS,PATH,COLUMNS,
+        VARCHAR,DECIMAL,INT,DATE,DATETIME,TIMESTAMP,
+        CREATE,TABLE,INSERT,INTO,VALUES,SELECT,FROM,WHERE,
+        ORDER,BY,JOIN,ON,AND,OR,NOT,NULL,PRIMARY,KEY,
+        FOREIGN,REFERENCES,INDEX,UNIQUE,WITH},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstdefinestyle{sqlstyle}{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+
+% Estilo Java (Ej. 2 con Gson)
+\lstdefinestyle{javastyle}{
     language=Java,
     basicstyle=\ttfamily\footnotesize,
     keywordstyle=\color{codekw}\bfseries,
@@ -59,6 +118,8 @@
     belowskip=8pt,
     tabsize=2
 }
+
+% Estilo plano (JsonPath, JSON literal, shell)
 \lstdefinestyle{plain}{
     basicstyle=\ttfamily\footnotesize,
     backgroundcolor=\color{codebg},
@@ -72,6 +133,7 @@
     aboveskip=8pt,
     belowskip=8pt
 }
+
 \lstset{style=jsstyle}
 
 % --- Cajas de nota ---
@@ -81,6 +143,14 @@
 
 % --- Hipervínculos ---
 \usepackage[hidelinks,bookmarks=true]{hyperref}
+
+% --- Comandos auxiliares (mismos que en Prácticos 1-6) ---
+\newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+\newcommand{\bloqueConsigna}{\itemcabecera{Consigna}}
+\newcommand{\bloqueIdea}{\itemcabecera{Idea}}
+\newcommand{\bloqueSolucion}{\itemcabecera{Soluci\'on}}
+\newcommand{\bloquePorque}{\itemcabecera{Por qu\'e funciona}}
+\newcommand{\bloqueMySQL}{\itemcabecera{En MySQL 8+ (JSON)}}
 
 \title{Trabajo Práctico N.\textsuperscript{o} 7: JSON y MongoDB\\[4pt]
        \large Bases de Datos II}
@@ -112,8 +182,7 @@
     \end{tabular}
 
     \vfill
-    {\small Resolución basada en el Teórico 9 (XML y JSON) y en
-    experimentación con JsonPath/Gson en Java, MongoDB y Compass.}
+    {\small Resolución basada en el Teórico 9 (XML y JSON) y en experimentación con JsonPath/Gson en Java, MongoDB y Compass.}
 \end{titlepage}
 
 \tableofcontents
@@ -123,94 +192,41 @@
 \section{Introducción}
 % =====================================================
 
-El Práctico 7 introduce dos tecnologías centrales de los modelos
-documentales: \textbf{JSON} como formato semiestructurado y
-\textbf{MongoDB} como motor de base de datos orientado a documentos. Los
-cinco ejercicios cubren ambos lados:
+El Práctico 7 introduce dos tecnologías centrales del modelo documental: \textbf{JSON} como formato semiestructurado y \textbf{MongoDB} como motor de base de datos orientado a documentos. Los cinco ejercicios cubren ambos lados:
 
 \begin{itemize}
-    \item \textbf{Ejercicios 1 y 2}: trabajo con JSON desde Java. Consultas
-    a un documento JSON con JsonPath (estilo XPath para JSON) y generación
-    programática de un documento JSON a partir de una base relacional
-    usando la biblioteca Gson.
-    \item \textbf{Ejercicios 3 a 5}: modelado en MongoDB. Diseño de
-    colecciones, carga de datos y consultas (incluyendo \texttt{\$lookup}
-    para joins entre colecciones).
+    \item \textbf{Ejercicios 1 y 2}: trabajo con JSON desde Java. Consultas a un documento JSON con JsonPath (estilo XPath para JSON) y generación programática de un documento JSON a partir de una base relacional con la biblioteca Gson.
+    \item \textbf{Ejercicios 3 a 5}: modelado en MongoDB. Diseño de colecciones, carga de datos y consultas (incluyendo \texttt{\$lookup} para joins entre colecciones).
 \end{itemize}
+
+Cada ejercicio sigue siempre la misma estructura: \textbf{Consigna} (texto literal del PDF), \textbf{Idea} (lectura natural y concepto detrás), \textbf{Solución} (JsonPath, Java, mongosh según corresponda), \textbf{Por qué funciona} (lógica paso a paso) y \textbf{En MySQL 8+ (JSON)} (equivalente con columnas \texttt{JSON} y funciones nativas: \texttt{JSON\_EXTRACT}, \texttt{JSON\_TABLE}, \texttt{JSON\_OBJECT}, \texttt{JSON\_ARRAYAGG}, operadores \texttt{->} y \texttt{->>}).
 
 \begin{nota}
-\textbf{Recursos del práctico.} La cátedra provee un proyecto Java con
-Gson y JsonPath, copiado en \texttt{practico-07/recursos/json/}. Los
-documentos de ejemplo son \texttt{json.txt} (de la teoría) y
-\texttt{jsonInventario.txt} (del Ejercicio~1).
+\textbf{Recursos del práctico.} La cátedra provee un proyecto Java con Gson y JsonPath, copiado en \texttt{practico-07/recursos/json/}. Los documentos de ejemplo son \texttt{json.txt} (de la teoría) y \texttt{jsonInventario.txt} (del Ejercicio~1). Para MongoDB se asume \texttt{mongosh} 1.x o superior conectando a un servidor 6.x+.
 \end{nota}
-
-\subsection*{Verificación de las resoluciones existentes}
-
-Antes de redactar este documento se revisaron los cinco \texttt{README} y
-los scripts asociados. Conclusiones:
-
-\begin{itemize}
-    \item \textbf{Ejercicio 1}: las expresiones JsonPath son correctas y
-    consistentes con la sintaxis de Jayway. Se interpretó ``bajo stock''
-    como \texttt{cantidad < stock\_min}, que es lo natural dado que
-    \texttt{stock\_min} está como campo raíz del JSON.
-    \item \textbf{Ejercicio 2}: el programa Java con JDBC + Gson arma
-    correctamente un único documento con facturas e items anidados.
-    \item \textbf{Ejercicio 3}: el diseño con tres colecciones
-    (\texttt{usuarios}, \texttt{noticias}, \texttt{comentarios}) refleja
-    bien el E/R y respeta la cardinalidad de cada relación. Validadores
-    \texttt{\$jsonSchema} e índices únicos cargados.
-    \item \textbf{Ejercicio 4}: la carga cumple el mínimo del enunciado
-    (2 usuarios, 4 noticias, 2 comentarios por noticia) y es idempotente
-    por \emph{upsert}.
-    \item \textbf{Ejercicio 5}: las tres consultas devuelven lo pedido;
-    la (c) usa \texttt{\$lookup} para resolver el join lógico
-    entre \texttt{noticias} y \texttt{usuarios}.
-\end{itemize}
-
-No se encontraron errores. Lo que sigue documenta cada resolución
-explicando el porqué de las decisiones de modelado y la sintaxis usada.
 
 % =====================================================
 \section{Ejercicio 1: Consultas JsonPath sobre el inventario}
 % =====================================================
 
-\paragraph{Enunciado.} Dado el documento \texttt{jsonInventario.txt},
-resolver con JsonPath:
-\begin{enumerate}[label=(\alph*)]
-    \item Todos los ítems del inventario.
-    \item Nombres de todos los ítems.
-    \item Ítems que están bajos en stock.
-    \item Colores de los ítems cuyo alto es mayor a 10\,cm.
+\bloqueConsigna
+
+Dado el documento \texttt{jsonInventario.txt} realice las siguientes consultas:
+
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item Todos los items del inventario.
+    \item Nombres de todos items del inventario.
+    \item Item que están bajos en stock.
+    \item Colores de los items cuyo alto es más de 10 cm.
 \end{enumerate}
 
-\subsection{Marco teórico aplicado}
+\bloqueIdea
 
-\textbf{JsonPath} es un lenguaje de consulta para documentos JSON
-inspirado en XPath. Sus operadores clave:
+JsonPath es un lenguaje de consulta para documentos JSON inspirado en XPath: \texttt{\$} representa la raíz, \texttt{.} navega hijos, \texttt{[*]} es comodín de arreglo y \texttt{[?(...)]} es un predicado de filtro. El concepto detrás del ejercicio es que un documento JSON anidado se puede explorar y filtrar declarativamente, igual que XPath sobre XML, sin necesidad de recorrer el árbol con código imperativo.
 
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-Operador & Significado \\
-\midrule
-\texttt{\$}                       & Raíz del documento. \\
-\texttt{@}                        & Nodo actual (dentro de un filtro). \\
-\texttt{.}                        & Acceso a hijo. \\
-\texttt{[*]}                      & Comodín de elemento. \\
-\texttt{[?(...)]}                 & Predicado/filtro. \\
-\texttt{..}                       & Recorrido en profundidad. \\
-\texttt{[n]} / \texttt{[a:b]}     & Índice / rango de arreglo. \\
-\bottomrule
-\end{tabular}
-\end{center}
+\bloqueSolucion
 
-Operadores de filtro: \texttt{==}, \texttt{!=}, \texttt{<}, \texttt{<=},
-\texttt{>}, \texttt{>=}, \texttt{=$\sim$} (regex), \texttt{in},
-\texttt{nin}, \texttt{size}, etc.
-
-\subsection{Estructura del documento}
+\textit{Estructura del documento:}
 
 \begin{lstlisting}[style=plain]
 {
@@ -233,101 +249,127 @@ Operadores de filtro: \texttt{==}, \texttt{!=}, \texttt{<}, \texttt{<=},
 }
 \end{lstlisting}
 
-Observaciones útiles para los filtros:
+Observaciones útiles: \texttt{stock\_min} está en la raíz (no dentro de cada ítem); la unidad varía entre \texttt{cm} y \texttt{pulgadas} (hay que filtrar por unidad para comparar alturas).
 
-\begin{itemize}
-    \item \texttt{stock\_min} está en la \emph{raíz}, no dentro de cada
-    ítem $\Rightarrow$ se referencia con \texttt{\$['stock\_min']}.
-    \item La unidad de medida varía (cm/pulgadas) $\Rightarrow$ para
-    comparar el alto en cm hay que filtrar también por unidad.
-\end{itemize}
-
-\subsection{Resolución por inciso}
-
-\subsubsection*{a) Todos los ítems}
+\textit{a) Todos los ítems:}
 
 \begin{lstlisting}[style=plain]
 $.inventario.items[*]
 \end{lstlisting}
 
-Devuelve el arreglo completo con los cinco objetos.
-
-\subsubsection*{b) Nombres de todos los ítems}
+\textit{b) Nombres de todos los ítems:}
 
 \begin{lstlisting}[style=plain]
 $.inventario.items[*].nombre
+-- Resultado: ["tv","notebook","mesa","planner","postcard"]
 \end{lstlisting}
 
-\noindent Resultado:
-
-\begin{lstlisting}[style=plain]
-["tv","notebook","mesa","planner","postcard"]
-\end{lstlisting}
-
-\subsubsection*{c) Ítems con bajo stock}
-
-Criterio: $\texttt{cantidad} < \texttt{stock\_min}$ donde
-\texttt{stock\_min} está en la raíz.
+\textit{c) Ítems con bajo stock} ($\texttt{cantidad} < \texttt{stock\_min}$):
 
 \begin{lstlisting}[style=plain]
 $.inventario.items[?(@.cantidad < $['stock_min'])]
+-- Cumplen: tv (25), notebook (50), postcard (45)
 \end{lstlisting}
 
-\noindent Cumplen la condición:
-
-\begin{itemize}
-    \item \texttt{tv} (25)
-    \item \texttt{notebook} (50)
-    \item \texttt{postcard} (45)
-\end{itemize}
-
-\subsubsection*{d) Colores de ítems con alto $>$ 10\,cm}
-
-Filtramos por \texttt{unidad == "cm"} y \texttt{alto > 10}, y
-proyectamos los colores:
+\textit{d) Colores de ítems con alto $>$ 10 cm} (filtrar por unidad y alto):
 
 \begin{lstlisting}[style=plain]
 $.inventario.items[?(@.tamanio.unidad == 'cm' && @.tamanio.alto > 10)].colores[*]
+-- Solo tv (alto=14, cm) cumple; postcard tiene alto=10 (estricto, no entra)
+-- Resultado: ["negro","amarillo"]
 \end{lstlisting}
 
-Sólo \texttt{tv} (alto = 14, unidad = cm) cumple; \texttt{postcard}
-tiene alto exactamente 10. Resultado:
-
-\begin{lstlisting}[style=plain]
-["negro","amarillo"]
-\end{lstlisting}
-
-\subsection{Ejecución (Java + Jayway)}
-
-La clase \texttt{practico-07/recursos/json/src/jsonPath/\\Ejercicio1Inventario.java}
-arma estas consultas con la biblioteca de Jayway:
+\textit{Ejecución desde Java con Jayway:}
 
 \begin{lstlisting}[style=plain]
 javac -cp "lib/*" -d bin src/jsonPath/Ejercicio1Inventario.java
 java  -cp "bin:lib/*" jsonPath.Ejercicio1Inventario
 \end{lstlisting}
 
-La salida puede traer una advertencia SLF4J inocua; los resultados de
-las cuatro consultas coinciden con lo que se calcula a mano arriba.
+\bloquePorque
+
+\begin{itemize}
+    \item En el inciso (a), \texttt{[*]} expande el arreglo \texttt{items} a todos sus elementos; sin el \texttt{[*]}, devolvería el array literal sin desempaquetar.
+    \item En (b), la proyección \texttt{.nombre} aplicada a cada elemento del arreglo recolecta solo ese campo en un arreglo nuevo.
+    \item En (c), el predicado \texttt{[?(...)]} compara la propiedad del nodo actual (\texttt{@.cantidad}) contra una referencia absoluta a la raíz (\texttt{\$['stock\_min']}). El estilo entre corchetes con comillas evita conflictos con el guión bajo o palabras reservadas.
+    \item En (d), la conjunción de dos condiciones (\texttt{\&\&}) y la proyección final de \texttt{.colores[*]} achatan el array de arrays en un único arreglo de strings.
+\end{itemize}
+
+\bloqueMySQL
+
+MySQL 8+ soporta el tipo \texttt{JSON} nativo, los operadores \texttt{->} (extracción) y \texttt{->>} (extracción + unquote), y \texttt{JSON\_TABLE} para ``aplanar'' arrays a filas relacionales.
+
+\begin{lstlisting}[style=sqlstyle]
+-- Tabla con el documento como columna JSON
+CREATE TABLE inventario_doc (
+    id INT PRIMARY KEY,
+    datos JSON NOT NULL
+);
+
+INSERT INTO inventario_doc (id, datos)
+VALUES (1, '{"inventario":{"items":[...]},"stock_min":60}');
+
+-- a) Todos los items del inventario
+SELECT datos->>'$.inventario.items' AS items FROM inventario_doc;
+
+-- b) Nombres de todos los items (JSON_TABLE aplana el array)
+SELECT it.nombre
+FROM inventario_doc d,
+     JSON_TABLE(
+         d.datos, '$.inventario.items[*]'
+         COLUMNS (nombre VARCHAR(100) PATH '$.nombre')
+     ) AS it;
+
+-- c) Items bajos en stock (cantidad < stock_min)
+SELECT it.nombre, it.cantidad
+FROM inventario_doc d,
+     JSON_TABLE(
+         d.datos, '$.inventario.items[*]'
+         COLUMNS (
+             nombre   VARCHAR(100) PATH '$.nombre',
+             cantidad INT          PATH '$.cantidad'
+         )
+     ) AS it
+WHERE it.cantidad < JSON_VALUE(d.datos, '$.stock_min');
+
+-- d) Colores de items con alto > 10 cm
+SELECT it.nombre, it.colores
+FROM inventario_doc d,
+     JSON_TABLE(
+         d.datos, '$.inventario.items[*]'
+         COLUMNS (
+             nombre  VARCHAR(100)   PATH '$.nombre',
+             alto    DECIMAL(10,2)  PATH '$.tamanio.alto',
+             unidad  VARCHAR(20)    PATH '$.tamanio.unidad',
+             colores JSON           PATH '$.colores'
+         )
+     ) AS it
+WHERE it.unidad = 'cm' AND it.alto > 10;
+\end{lstlisting}
+
+\textit{Diferencias relevantes con JsonPath puro:}
+
+\begin{itemize}
+    \item \texttt{JSON\_TABLE} es la herramienta clave: convierte un array JSON en filas SQL para poder usar \texttt{WHERE}, \texttt{ORDER BY} y joins habituales. Sin esto, hay que combinar varios \texttt{JSON\_EXTRACT} con índices duros.
+    \item Los operadores \texttt{->} y \texttt{->>} solo funcionan con \emph{paths fijos} (no admiten predicados como \texttt{[?(...)]}); por eso para condiciones se necesita \texttt{JSON\_TABLE}.
+    \item Para indexar accesos JSON frecuentes en MySQL hay que crear \emph{columnas generadas} (\texttt{GENERATED ALWAYS AS (...) STORED}) e indexar esas columnas; los índices funcionales sobre \texttt{JSON\_EXTRACT} llegaron recién en 8.0.13.
+\end{itemize}
 
 % =====================================================
 \section{Ejercicio 2: Generar un JSON único de facturas e items}
 % =====================================================
 
-\paragraph{Enunciado.} Hacer un programa Java (con la biblioteca Gson)
-que cree un único documento JSON con la información de la tabla
-\texttt{factura} y sus \texttt{items} de la base del Práctico~1.a.
+\bloqueConsigna
 
-\subsection{Marco teórico aplicado}
+Realice un programa Java (ver biblioteca GSON) que cree un único documento json con la información almacenada en la tabla Factura y sus Items (base de datos del ejercicio 1) a de la práctica 1).
 
-\textbf{Gson} es la biblioteca de Google para serializar Java a JSON.
-La idea del ejercicio es \emph{aplanar} un modelo relacional con dos
-tablas (1:N entre \texttt{factura} e \texttt{item\_factura}) a un único
-documento JSON con un arreglo de facturas y, dentro de cada factura, un
-arreglo anidado de items. Este patrón es el que MongoDB y otros motores
-documentales aprovechan para evitar joins en lecturas.
+\bloqueIdea
 
-\subsection{Esquema del documento generado}
+Se pide \emph{aplanar} un modelo relacional (1:N entre \texttt{factura} e \texttt{item\_factura}) a un único documento JSON con un arreglo de facturas y, dentro de cada factura, un arreglo anidado de items. Es el patrón canónico de exportación a un modelo documental; Gson se ocupa de la serialización segura (escape de comillas, codificación de números/fechas, manejo de \texttt{null}).
+
+\bloqueSolucion
+
+\textit{Esquema del documento generado:}
 
 \begin{lstlisting}[style=plain]
 {
@@ -348,108 +390,131 @@ documentales aprovechan para evitar joins en lecturas.
 }
 \end{lstlisting}
 
-\subsection{Estructura de la solución}
-
-Archivos del proyecto Java:
+\textit{Estructura del proyecto Java:}
 
 \begin{itemize}
-    \item \texttt{recursos/json/src/jsonPath/Ejercicio2FacturaJson.java}:
-    main del programa.
-    \item \texttt{recursos/json/config/db.mysql.properties}: parámetros
-    de conexión y nombres de tablas.
-    \item \texttt{recursos/json/lib/gson-2.8.6.jar},
-    \texttt{mysql-connector-j-8.0.33.jar}: dependencias.
+    \item \texttt{recursos/json/src/jsonPath/Ejercicio2FacturaJson.java}: main del programa.
+    \item \texttt{recursos/json/config/db.mysql.properties}: parámetros de conexión y nombres de tablas.
+    \item \texttt{recursos/json/lib/gson-2.8.6.jar}, \texttt{mysql-connector-j-8.0.33.jar}: dependencias.
 \end{itemize}
 
-El programa:
+\textit{Flujo del programa:}
 
 \begin{enumerate}
     \item lee la configuración del \texttt{.properties};
     \item abre una conexión JDBC a \texttt{practico1a\_mysql};
     \item lee todas las facturas en un \texttt{Map<Long, Factura>};
-    \item lee los items y los agrupa por \texttt{nro\_factura}
-    asociándolos a la factura correspondiente;
+    \item lee los items y los agrupa por \texttt{nro\_factura};
     \item arma una raíz \texttt{\{ generado\_en, facturas[] \}};
     \item serializa con \texttt{new GsonBuilder().setPrettyPrinting().create().toJson(raiz)};
-    \item guarda el resultado en \texttt{salida/facturas\_items.json}.
+    \item escribe el resultado en \texttt{salida/facturas\_items.json}.
 \end{enumerate}
 
-\subsection{Compilación y ejecución}
+\textit{Bloque clave del programa (Gson):}
 
-Desde \texttt{practico-07/recursos/json}:
+\begin{lstlisting}[style=javastyle]
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+Gson gson = new GsonBuilder()
+    .setPrettyPrinting()
+    .setDateFormat("yyyy-MM-dd")
+    .create();
+
+String json = gson.toJson(raiz);
+Files.writeString(Path.of("salida/facturas_items.json"), json);
+\end{lstlisting}
+
+\textit{Compilación y ejecución:}
 
 \begin{lstlisting}[style=plain]
 javac -cp "lib/*" -d bin src/jsonPath/Ejercicio2FacturaJson.java
 java  -cp "bin:lib/*" jsonPath.Ejercicio2FacturaJson config/db.mysql.properties
 \end{lstlisting}
 
-El programa imprime la ruta del archivo generado y la cantidad de
-facturas exportadas. En la corrida de prueba documentada en el
-\texttt{README} (sobre una instancia sin filas en \texttt{factura}),
-exportó cero facturas y produjo un documento JSON consistente con un
-arreglo vacío, validando que el flujo (conexión, lectura, serialización,
-escritura) funciona correctamente.
-
-\begin{nota}
-\textbf{Por qué Gson y no construir el JSON a mano.} Gson maneja escape
-de strings, números, fechas y \texttt{null} de manera correcta. Construir
-JSON con \texttt{StringBuilder} es propenso a errores (escape de
-comillas, codificación, fechas) y se rompe en cuanto los datos
-contienen un signo \texttt{"} dentro de un campo de texto.
-\end{nota}
-
-% =====================================================
-\section{Ejercicio 3: Diseño en MongoDB}
-% =====================================================
-
-\paragraph{Enunciado.} Crear una base en MongoDB con colecciones que
-permitan cargar datos según el siguiente E/R: \texttt{usuarios}
-(\texttt{nick}, \texttt{nyape}, \texttt{edad}, \texttt{dirección}
-compuesta por \texttt{calle} y \texttt{altura}, \texttt{telefonos}),
-\texttt{noticias} (\texttt{codigo}, \texttt{texto}, \texttt{fecha}) que
-los usuarios crean (1:N), y \texttt{comentarios} (\texttt{codigo},
-\texttt{texto}) que los usuarios \emph{hacen} (1:N) \emph{para} las
-noticias (1:N) con palabras clave.
-
-\subsection{Marco teórico aplicado}
-
-MongoDB es una base de datos \textbf{documental}: el dato unitario es un
-documento JSON/BSON y los documentos se agrupan en \textbf{colecciones}
-(equivalentes lógicos de las tablas pero sin esquema rígido). Cada
-documento tiene un \texttt{\_id} único.
-
-\paragraph{Modelado documental.} A diferencia del modelo relacional, en
-documentales:
+\bloquePorque
 
 \begin{itemize}
-    \item los \emph{atributos compuestos} se modelan como \emph{objetos
-    embebidos} (la \texttt{direccion = \{calle, altura\}} no necesita
-    una colección aparte);
-    \item los \emph{atributos multivaluados} se modelan como
-    \emph{arreglos} (los \texttt{telefonos} viven dentro del usuario);
-    \item las \emph{relaciones} se resuelven con \emph{embedding} (anidar
-    el dependiente dentro) o \emph{referencing} (guardar una clave que
-    apunta a otra colección). No hay constraints de \emph{foreign key}.
+    \item El paso 4 (agrupar items por \texttt{nro\_factura}) es donde ocurre el ``aplanado'': los items dejan de ser una tabla aparte y se anidan dentro de su factura.
+    \item Gson maneja automáticamente el escape de strings (\texttt{"} dentro de un campo se convierte en \texttt{\textbackslash"}), las fechas y los \texttt{null}; construir el JSON con \texttt{StringBuilder} es propenso a errores en cuanto los datos tienen caracteres especiales.
+    \item \texttt{setPrettyPrinting()} indenta el JSON con dos espacios para que sea legible; en producción se suele omitir para ahorrar espacio.
 \end{itemize}
 
-\paragraph{Decisión de modelado.}
+\bloqueMySQL
+
+MySQL 8+ permite generar el mismo documento JSON \emph{directamente en SQL}, sin pasar por Java. \texttt{JSON\_OBJECT} arma un objeto, \texttt{JSON\_ARRAYAGG} agrupa filas en un arreglo y se pueden anidar para construir documentos arbitrarios:
+
+\begin{lstlisting}[style=sqlstyle]
+USE practico1a_mysql;
+
+SELECT JSON_OBJECT(
+    'generado_en', NOW(),
+    'facturas', (
+        SELECT JSON_ARRAYAGG(
+            JSON_OBJECT(
+                'nro_factura', f.nro_factura,
+                'nro_cliente', f.nro_cliente,
+                'fecha',       f.fecha,
+                'monto',       f.monto,
+                'items', (
+                    SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'cod_producto', i.cod_producto,
+                            'cantidad',     i.cantidad,
+                            'precio',       i.precio
+                        )
+                    )
+                    FROM item_factura i
+                    WHERE i.nro_factura = f.nro_factura
+                )
+            )
+        )
+        FROM factura f
+    )
+) AS documento;
+\end{lstlisting}
+
+\textit{Diferencias relevantes con el enfoque Java+Gson:}
 
 \begin{itemize}
-    \item \texttt{direccion} y \texttt{telefonos} van \emph{dentro} de
-    \texttt{usuarios} (no son entidades propias, son atributos del
-    usuario).
-    \item \texttt{noticias} y \texttt{comentarios} se mantienen como
-    colecciones \emph{aparte} con referencias por clave de negocio,
-    porque su volumen y su ciclo de vida son independientes (un usuario
-    puede crear muchas noticias y muchas vidas de la app pueden agregar
-    comentarios a una misma noticia).
+    \item Una sola sentencia SQL reemplaza el programa Java entero: se ahorra todo el código de conexión, agrupado en memoria y serialización.
+    \item \texttt{JSON\_ARRAYAGG} no garantiza orden a menos que se use con una subconsulta \texttt{ORDER BY} (en MySQL 8.0.14+ se puede usar \texttt{... ORDER BY} dentro de la función agregada).
+    \item Para volcar el resultado a archivo se usa \texttt{SELECT ... INTO OUTFILE} o se redirige la salida del cliente (\texttt{mysql -e "SELECT ..."  > facturas\_items.json}).
 \end{itemize}
 
-\subsection{Esquema implementado}
+% =====================================================
+\section{Ejercicio 3: Diseño de la base en MongoDB}
+% =====================================================
 
-\paragraph{Colección \texttt{usuarios}.}
+\bloqueConsigna
+
+Cree una base de datos en MongoDB que contengan colecciones que permitan cargar datos con la siguiente estructura definida con un diagrama de E/R:
+
+\begin{itemize}
+    \item \texttt{usuarios}: \texttt{nick}, \texttt{NyApe}, \texttt{edad}, \texttt{direccion} (compuesta por \texttt{calle} y \texttt{altura}), \texttt{telefonos}.
+    \item \texttt{noticias}: \texttt{codigo}, \texttt{texto}, \texttt{fecha}; cada usuario \emph{crea} 1:N noticias.
+    \item \texttt{comentarios}: \texttt{codigo}, \texttt{texto}; cada usuario \emph{hace} 1:N comentarios, y cada noticia tiene N comentarios \emph{para} ella, con palabras clave.
+\end{itemize}
+
+\textbf{Nota:} El campo dirección está compuesto por calle y altura.
+
+\bloqueIdea
+
+MongoDB es documental: el dato unitario es un documento JSON/BSON y se agrupa en \emph{colecciones} (equivalente lógico de tablas pero sin esquema rígido). La diferencia clave con el modelo relacional es la decisión \emph{embedding vs referencing}: atributos compuestos (\texttt{direccion}) y multivaluados (\texttt{telefonos}) van \textbf{embebidos} dentro del usuario; entidades con ciclo de vida independiente (\texttt{noticias}, \texttt{comentarios}) van en colecciones \textbf{separadas} con referencias por clave de negocio.
+
+\bloqueSolucion
+
+\textit{Decisión de modelado:}
+
+\begin{itemize}
+    \item \texttt{direccion} y \texttt{telefonos} van dentro de \texttt{usuarios} (atributos del usuario, no entidades).
+    \item \texttt{noticias} y \texttt{comentarios} se mantienen como colecciones aparte porque su volumen y ciclo de vida son independientes.
+\end{itemize}
+
+\textit{Esquema de las colecciones:}
 
 \begin{lstlisting}[style=plain]
+// usuarios
 {
   nick:       "<clave de negocio, unica>",
   nyape:      "<nombre y apellido>",
@@ -457,22 +522,16 @@ documentales:
   direccion:  { calle: "<string>", altura: <int> },
   telefonos:  [ "<tel1>", "<tel2>", ... ]
 }
-\end{lstlisting}
 
-\paragraph{Colección \texttt{noticias}.}
-
-\begin{lstlisting}[style=plain]
+// noticias
 {
   codigo:      <int, unico>,
   texto:       "<string>",
   fecha:       <Date>,
   autor_nick:  "<ref logica a usuarios.nick>"
 }
-\end{lstlisting}
 
-\paragraph{Colección \texttt{comentarios}.}
-
-\begin{lstlisting}[style=plain]
+// comentarios
 {
   codigo:          <int, unico>,
   texto:           "<string>",
@@ -482,16 +541,9 @@ documentales:
 }
 \end{lstlisting}
 
-\subsection{Script de creación (mongosh)}
+\textit{Script de creación (mongosh) con \texttt{\$jsonSchema} e índices:}
 
-El script \texttt{mongosh/01\_schema.js} crea la base, las tres
-colecciones con \texttt{\$jsonSchema} para validar tipos, e índices
-únicos sobre las claves de negocio (\texttt{nick}, \texttt{codigo}) más
-índices auxiliares para las consultas por relación
-(\texttt{noticias.autor\_nick}, \texttt{comentarios.autor\_nick},
-\texttt{comentarios.noticia\_codigo}).
-
-\begin{lstlisting}[style=plain]
+\begin{lstlisting}
 use("practico7_er_noticias");
 db.dropDatabase();
 
@@ -525,53 +577,99 @@ db.comentarios.createIndex({ autor_nick:     1 });
 db.comentarios.createIndex({ noticia_codigo: 1 });
 \end{lstlisting}
 
-\begin{nota}
-\textbf{Por qué no embeber los comentarios dentro de la noticia.}
-Es una decisión clásica de modelado documental. Embeberlos es atractivo
-si la cardinalidad típica es baja y la consulta dominante es ``noticia
-+ sus comentarios''. Acá los comentarios son entidades con
-\texttt{codigo} propio, \texttt{autor\_nick} y \texttt{pal\_claves}, y
-crece de a uno por interacción de usuario. Mantenerlos en una colección
-separada evita documentos que crezcan sin tope y simplifica los índices
-secundarios sobre los comentarios.
-\end{nota}
+\bloquePorque
 
-\subsection{Ejecución}
+\begin{itemize}
+    \item \texttt{direccion} y \texttt{telefonos} embebidos: la consulta dominante es ``traer un usuario completo'', así se evita un join lógico y la cardinalidad por usuario es chica (1 dirección, pocos teléfonos).
+    \item \texttt{comentarios} en colección aparte (en vez de embebidos en la noticia): los comentarios crecen sin tope con la actividad, mantenerlos embebidos haría documentos cada vez más grandes; además tienen \texttt{codigo} propio y \texttt{pal\_claves}, lo que los hace entidades de pleno derecho.
+    \item \texttt{\$jsonSchema} aporta validación de tipos a la inserción, simulando los \texttt{CHECK} del modelo relacional sin perder la flexibilidad documental.
+    \item Los índices únicos sobre \texttt{nick} y \texttt{codigo} aseguran la integridad de claves de negocio (MongoDB no tiene FKs, así que esta validación queda del lado de la aplicación).
+\end{itemize}
 
-Desde \texttt{practico-07/ejercicio-03}:
+\bloqueMySQL
 
-\begin{lstlisting}[style=plain]
-mongosh < mongosh/01_schema.js
-mongosh < mongosh/02_seed_data.js
+El mismo E/R se puede modelar en MySQL 8+ con columnas \texttt{JSON}. Para indexar atributos dentro del JSON (\texttt{nick}, \texttt{autor\_nick}, \texttt{apellido}), se usan \emph{columnas generadas} \texttt{STORED} sobre las cuales sí se puede crear un \texttt{INDEX} o \texttt{FOREIGN KEY}:
+
+\begin{lstlisting}[style=sqlstyle]
+CREATE DATABASE practico7_er_mysql;
+USE practico7_er_mysql;
+
+CREATE TABLE usuarios (
+    nick     VARCHAR(60) PRIMARY KEY,
+    datos    JSON NOT NULL,
+    apellido VARCHAR(60) GENERATED ALWAYS AS (
+        SUBSTRING_INDEX(JSON_UNQUOTE(datos->>'$.nyape'), ' ', -1)
+    ) STORED,
+    edad     INT GENERATED ALWAYS AS (
+        CAST(JSON_EXTRACT(datos, '$.edad') AS UNSIGNED)
+    ) STORED,
+    INDEX idx_apellido (apellido),
+    INDEX idx_edad     (edad)
+);
+
+CREATE TABLE noticias (
+    codigo      INT PRIMARY KEY,
+    datos       JSON NOT NULL,
+    autor_nick  VARCHAR(60) GENERATED ALWAYS AS (
+        JSON_UNQUOTE(datos->>'$.autor_nick')
+    ) STORED,
+    fecha       DATE GENERATED ALWAYS AS (
+        CAST(JSON_UNQUOTE(datos->>'$.fecha') AS DATE)
+    ) STORED,
+    INDEX idx_autor (autor_nick),
+    INDEX idx_fecha (fecha),
+    FOREIGN KEY (autor_nick) REFERENCES usuarios(nick)
+);
+
+CREATE TABLE comentarios (
+    codigo          INT PRIMARY KEY,
+    datos           JSON NOT NULL,
+    autor_nick      VARCHAR(60) GENERATED ALWAYS AS (
+        JSON_UNQUOTE(datos->>'$.autor_nick')
+    ) STORED,
+    noticia_codigo  INT GENERATED ALWAYS AS (
+        CAST(JSON_EXTRACT(datos, '$.noticia_codigo') AS UNSIGNED)
+    ) STORED,
+    INDEX idx_autor   (autor_nick),
+    INDEX idx_noticia (noticia_codigo),
+    FOREIGN KEY (autor_nick)     REFERENCES usuarios(nick),
+    FOREIGN KEY (noticia_codigo) REFERENCES noticias(codigo)
+);
 \end{lstlisting}
+
+\textit{Limitaciones a notar:}
+
+\begin{itemize}
+    \item MySQL no tiene \emph{pipeline} de agregación como MongoDB: las consultas analíticas se escriben con SQL estándar más funciones JSON.
+    \item No hay \texttt{\$lookup} recursivo (\texttt{\$graphLookup} en MongoDB): los joins son los de SQL clásico.
+    \item Los índices sobre JSON requieren columnas generadas; un \texttt{INDEX} directo sobre \texttt{JSON\_EXTRACT} no se permite hasta crear primero la generated column.
+\end{itemize}
 
 % =====================================================
 \section{Ejercicio 4: Carga mínima}
 % =====================================================
 
-\paragraph{Enunciado.} Agregar a la base al menos 2 usuarios, 4 noticias
-y 2 comentarios por cada noticia.
+\bloqueConsigna
 
-\subsection{Datos de carga}
+Agregue a la base de datos creada al menos dos usuarios, 4 noticias y dos comentarios por noticia.
 
-Se insertan:
+\bloqueIdea
+
+Es una carga seed. La sutileza está en hacerla \emph{idempotente}: los índices únicos creados en el Ejercicio 3 fallarían si se re-ejecutan los \texttt{insertOne}. El idiom de MongoDB es \texttt{updateOne(..., \{ upsert: true \})}: si el documento existe se actualiza, si no se inserta.
+
+\bloqueSolucion
+
+\textit{Datos a insertar:}
 
 \begin{itemize}
     \item 2 usuarios: \texttt{moises}, \texttt{elias}.
     \item 4 noticias con \texttt{codigo}\,$\in\{2001,2002,2003,2004\}$.
-    \item 8 comentarios: 2 por noticia, con
-    \texttt{codigo}\,$\in\{7001,\ldots,7008\}$.
+    \item 8 comentarios (2 por noticia) con \texttt{codigo}\,$\in\{7001,\ldots,7008\}$.
 \end{itemize}
 
-\subsection{Estrategia: \texttt{upsert} para idempotencia}
+\textit{Patrón \texttt{upsert} para idempotencia:}
 
-Si se ejecuta el script más de una vez, las inserciones simples
-fallarían por duplicado de \texttt{nick} y \texttt{codigo} (claves
-únicas creadas en el Ejercicio~3). Para evitarlo se usa
-\texttt{updateOne(..., \{ upsert: true \})}: si el documento existe se
-actualiza, si no se inserta.
-
-\begin{lstlisting}[style=plain]
+\begin{lstlisting}
 db.usuarios.updateOne(
   { nick: "moises" },
   { $set: {
@@ -582,69 +680,134 @@ db.usuarios.updateOne(
   }},
   { upsert: true }
 );
-// ... mismo patron para elias y para las 4 noticias / 8 comentarios
+
+db.usuarios.updateOne(
+  { nick: "elias" },
+  { $set: {
+      nyape: "Elias Perez",
+      edad:  NumberInt(38),
+      direccion: { calle: "Belgrano", altura: NumberInt(450) },
+      telefonos: ["358-3333333"]
+  }},
+  { upsert: true }
+);
+
+// 4 noticias (codigo 2001..2004), autor_nick alternando moises/elias
+db.noticias.updateOne(
+  { codigo: 2001 },
+  { $set: {
+      texto: "Nueva politica de privacidad",
+      fecha: ISODate("2024-08-01"),
+      autor_nick: "moises"
+  }},
+  { upsert: true }
+);
+// ... 2002, 2003, 2004 con autor_nick variable
+
+// 8 comentarios (2 por noticia)
+db.comentarios.updateOne(
+  { codigo: 7001 },
+  { $set: {
+      texto: "Muy buena noticia",
+      autor_nick: "elias",
+      noticia_codigo: 2001,
+      pal_claves: ["positivo","actualidad"]
+  }},
+  { upsert: true }
+);
+// ... 7002..7008
 \end{lstlisting}
 
-\subsection{Verificación}
+\textit{Verificación de conteos:}
 
-Conteos esperados después de la corrida:
+\begin{lstlisting}
+db.usuarios.countDocuments({ nick: { $in: ["moises","elias"] } });       // 2
+db.noticias.countDocuments({ codigo: { $in: [2001,2002,2003,2004] } });  // 4
+db.comentarios.countDocuments({ noticia_codigo: { $in: [2001,2002,2003,2004] } }); // 8
 
-\begin{lstlisting}[style=plain]
-db.usuarios.countDocuments({ nick: { $in: ["moises","elias"] } })
-// 2
-
-db.noticias.countDocuments({ codigo: { $in: [2001,2002,2003,2004] } })
-// 4
-
-db.comentarios.countDocuments({ noticia_codigo: { $in: [2001,2002,2003,2004] } })
-// 8
-\end{lstlisting}
-
-Para confirmar que efectivamente hay 2 comentarios \emph{por} noticia:
-
-\begin{lstlisting}[style=plain]
+// Confirmar 2 comentarios por noticia
 db.comentarios.aggregate([
   { $match: { noticia_codigo: { $in: [2001,2002,2003,2004] } } },
   { $group: { _id: "$noticia_codigo", total: { $sum: 1 } } },
   { $sort:  { _id: 1 } }
 ]);
+// 4 filas, todas con total=2
 \end{lstlisting}
 
-Debe devolver cuatro filas, todas con \texttt{total = 2}.
+\bloquePorque
+
+\begin{itemize}
+    \item \texttt{updateOne} con \texttt{upsert: true} es el patrón estándar para cargas idempotentes en MongoDB: si la fila clave (\texttt{nick} para usuarios, \texttt{codigo} para noticias y comentarios) ya existe, se actualiza; si no, se inserta. Re-correr el script no rompe nada.
+    \item \texttt{NumberInt(...)} fuerza el tipo \texttt{int} de BSON; sin esto, mongosh interpreta los números como \texttt{double}, lo que choca con el validador \texttt{\$jsonSchema} que pide \texttt{bsonType: "int"}.
+    \item \texttt{ISODate("...")} crea un valor \texttt{Date} de BSON; si se cargan strings la consulta del Ejercicio 5.c con \texttt{\$sort} podría ordenar lexicográficamente en vez de cronológicamente.
+\end{itemize}
+
+\bloqueMySQL
+
+El equivalente MySQL usa \texttt{INSERT ... ON DUPLICATE KEY UPDATE} para mantener idempotencia. Los documentos JSON se escriben como literales de string:
+
+\begin{lstlisting}[style=sqlstyle]
+USE practico7_er_mysql;
+
+INSERT INTO usuarios (nick, datos) VALUES
+  ('moises', JSON_OBJECT(
+      'nyape',     'Moises Gonzalez',
+      'edad',      45,
+      'direccion', JSON_OBJECT('calle','San Martin','altura',123),
+      'telefonos', JSON_ARRAY('358-1111111','358-2222222')
+  )),
+  ('elias',  JSON_OBJECT(
+      'nyape',     'Elias Perez',
+      'edad',      38,
+      'direccion', JSON_OBJECT('calle','Belgrano','altura',450),
+      'telefonos', JSON_ARRAY('358-3333333')
+  ))
+ON DUPLICATE KEY UPDATE datos = VALUES(datos);
+
+INSERT INTO noticias (codigo, datos) VALUES
+  (2001, JSON_OBJECT('texto','Nueva politica de privacidad',
+                     'fecha','2024-08-01','autor_nick','moises')),
+  (2002, JSON_OBJECT('texto','Resultados del torneo',
+                     'fecha','2024-08-05','autor_nick','elias')),
+  (2003, JSON_OBJECT('texto','Apertura del museo',
+                     'fecha','2024-08-10','autor_nick','moises')),
+  (2004, JSON_OBJECT('texto','Cambio en el transporte',
+                     'fecha','2024-08-15','autor_nick','elias'))
+ON DUPLICATE KEY UPDATE datos = VALUES(datos);
+
+-- comentarios (8 filas, 2 por noticia)
+INSERT INTO comentarios (codigo, datos) VALUES
+  (7001, JSON_OBJECT('texto','Muy buena noticia','autor_nick','elias',
+                     'noticia_codigo',2001,'pal_claves',JSON_ARRAY('positivo','actualidad'))),
+  -- ... 7002..7008
+ON DUPLICATE KEY UPDATE datos = VALUES(datos);
+\end{lstlisting}
+
+\textit{Diferencia clave con MongoDB:} las columnas generadas (\texttt{apellido}, \texttt{autor\_nick}, etc.) se calculan automáticamente con cada \texttt{INSERT}/\texttt{UPDATE}, así que no hay que duplicar la lógica de extracción al cargar datos. \texttt{ON DUPLICATE KEY UPDATE} reemplaza el documento completo cuando la PK ya existe (equivalente a \texttt{upsert}).
 
 % =====================================================
 \section{Ejercicio 5: Consultas MongoDB}
 % =====================================================
 
-\paragraph{Enunciado.} Sobre la base creada, resolver:
-\begin{enumerate}[label=(\alph*)]
-    \item Listar \texttt{nick}, \texttt{nombre}, \texttt{apellido} y
-    \texttt{edad} de todos los usuarios.
+\bloqueConsigna
+
+Resuelva las siguientes consultas:
+
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item Listar el nick, nombre y apellido y edad de todos los usuarios.
     \item Listar los usuarios de más de 40 años.
-    \item Devolver las noticias que crearon los usuarios de apellido
-    \texttt{Gonzalez} ordenadas por fecha.
+    \item Devolver las noticias que crearon los usuarios de apellido Gonzalez ordenadas por fecha.
 \end{enumerate}
 
-\subsection{Marco teórico aplicado}
+\bloqueIdea
 
-\paragraph{\texttt{find} vs \texttt{aggregate}.} \texttt{find} permite
-filtrar (primer parámetro) y proyectar (segundo parámetro). El
-\textbf{aggregation framework} (\texttt{aggregate}) es un pipeline de
-etapas (\texttt{\$match}, \texttt{\$project}, \texttt{\$lookup},
-\texttt{\$unwind}, \texttt{\$sort}, \texttt{\$group}, etc.) más
-expresivo: permite transformaciones que \texttt{find} no soporta, como
-calcular campos derivados o hacer \emph{joins} entre colecciones con
-\texttt{\$lookup}.
+Tres consultas con dificultad creciente. La (a) requiere transformar un campo concatenado (\texttt{nyape}) en dos campos separados; el aggregation pipeline lo hace con \texttt{\$split} y \texttt{\$arrayElemAt}. La (b) es un \texttt{find} con filtro y proyección. La (c) requiere un \emph{join lógico} entre \texttt{noticias} y \texttt{usuarios} (porque \texttt{autor\_nick} es referencia, no embedding), que en MongoDB se resuelve con \texttt{\$lookup} + \texttt{\$unwind}.
 
-\paragraph{Decisión de modelado relevante.} En este modelo,
-\texttt{nyape} es un único campo concatenando nombre y apellido. Para
-``listar nombre y apellido por separado'' (inciso a) hace falta
-descomponerlo, lo que se hace con \texttt{\$split} y
-\texttt{\$arrayElemAt}.
+\bloqueSolucion
 
-\subsection{a) Listar nick, nombre, apellido y edad}
+\textit{a) Listar nick, nombre, apellido, edad:}
 
-\begin{lstlisting}[style=plain]
+\begin{lstlisting}
 db.usuarios.aggregate([
   {
     $project: {
@@ -658,34 +821,20 @@ db.usuarios.aggregate([
 ]);
 \end{lstlisting}
 
-\paragraph{Cómo funciona.} \texttt{\$split} parte \texttt{nyape} por
-espacios y produce un arreglo: por ejemplo
-\texttt{"Moises Gonzalez"} $\rightarrow$
-\texttt{["Moises","Gonzalez"]}. \texttt{\$arrayElemAt} con índice
-\texttt{0} toma el primer token (nombre) y con \texttt{-1} toma el
-último (apellido). Esta convención cubre nombres compuestos como
-``Juan Carlos Perez'' tomando \texttt{Juan} como nombre y
-\texttt{Perez} como apellido.
+\texttt{\$split} parte \texttt{nyape} por espacios; \texttt{\$arrayElemAt} con índice 0 toma el primer token (nombre) y con -1 toma el último (apellido). La convención cubre nombres compuestos como "Juan Carlos Perez".
 
-\subsection{b) Usuarios de más de 40 años}
+\textit{b) Usuarios de más de 40 años:}
 
-\begin{lstlisting}[style=plain]
+\begin{lstlisting}
 db.usuarios.find(
   { edad: { $gt: 40 } },
   { _id: 0, nick: 1, nyape: 1, edad: 1 }
 );
 \end{lstlisting}
 
-Aquí basta con \texttt{find}: filtro por \texttt{\$gt} y proyección
-explícita de los campos relevantes, suprimiendo el \texttt{\_id}.
+\textit{c) Noticias de autores apellido Gonzalez ordenadas por fecha:}
 
-\subsection{c) Noticias de autores de apellido Gonzalez, por fecha}
-
-Como \texttt{noticias.autor\_nick} es una \emph{referencia lógica} a
-\texttt{usuarios.nick}, hay que ``unir'' las dos colecciones con
-\texttt{\$lookup}:
-
-\begin{lstlisting}[style=plain]
+\begin{lstlisting}
 db.noticias.aggregate([
   {
     $lookup: {
@@ -711,57 +860,71 @@ db.noticias.aggregate([
 ]);
 \end{lstlisting}
 
-\paragraph{Pipeline paso a paso.}
-\begin{enumerate}
-    \item \texttt{\$lookup}: por cada noticia, agrega el array
-    \texttt{autor} con los usuarios cuyo \texttt{nick} coincide con
-    \texttt{autor\_nick} (en el modelo, a lo sumo uno).
-    \item \texttt{\$unwind}: desempaqueta el array para que cada noticia
-    quede emparejada con un único documento de \texttt{autor}.
-    \item \texttt{\$match}: filtra por apellido usando expresión regular
-    insensible a mayúsculas. \texttt{/gonzalez\$/i} matchea
-    cualquier \texttt{nyape} que termine en ``gonzalez''.
-    \item \texttt{\$sort}: ordena por fecha ascendente.
-    \item \texttt{\$project}: arma el resultado con los campos pedidos.
-\end{enumerate}
+\bloquePorque
 
-\subsection{Ejecución}
+\begin{itemize}
+    \item En (a), \texttt{\$split} + \texttt{\$arrayElemAt} reproduce la lógica de \texttt{SUBSTRING\_INDEX} de MySQL pero dentro del pipeline. El \texttt{-1} en \texttt{\$arrayElemAt} es el truco para tomar el último elemento sin conocer el largo.
+    \item En (b) basta con \texttt{find}: el filtro \texttt{\{ edad: \{ \$gt: 40 \} \}} es directo y la proyección suprime \texttt{\_id} (que MongoDB siempre incluye por defecto).
+    \item En (c) el pipeline tiene cinco etapas: (1) \texttt{\$lookup} simula el join por igualdad; (2) \texttt{\$unwind} convierte el array de un solo elemento en un objeto plano; (3) \texttt{\$match} filtra con regex insensible a mayúsculas; (4) \texttt{\$sort} ordena cronológicamente (requiere que \texttt{fecha} sea \texttt{Date}, no string); (5) \texttt{\$project} arma el resultado.
+    \item Para que el \texttt{\$lookup} sea eficiente con grandes volúmenes, conviene tener \texttt{usuarios.nick} indexado (lo cumple el índice único del Ejercicio 3).
+\end{itemize}
 
-Desde \texttt{practico-07/ejercicio-05}:
+\bloqueMySQL
 
-\begin{lstlisting}[style=plain]
-mongosh < mongosh/01_queries_ej5.js
+Las tres consultas se traducen a SQL con funciones JSON. Los índices sobre columnas generadas (\texttt{apellido}, \texttt{autor\_nick}, \texttt{fecha}) hacen que los filtros y \texttt{ORDER BY} sean eficientes:
+
+\begin{lstlisting}[style=sqlstyle]
+-- a) nick, nombre, apellido, edad
+SELECT
+    nick,
+    SUBSTRING_INDEX(JSON_UNQUOTE(datos->>'$.nyape'), ' ',  1) AS nombre,
+    SUBSTRING_INDEX(JSON_UNQUOTE(datos->>'$.nyape'), ' ', -1) AS apellido,
+    JSON_EXTRACT(datos, '$.edad')                             AS edad
+FROM usuarios;
+
+-- b) Usuarios de mas de 40 anios (usa el indice idx_edad sobre la columna generada)
+SELECT
+    nick,
+    datos->>'$.nyape' AS nyape,
+    edad
+FROM usuarios
+WHERE edad > 40;
+
+-- c) Noticias de autores apellido Gonzalez ordenadas por fecha
+SELECT
+    n.codigo,
+    n.datos->>'$.texto'      AS texto,
+    n.fecha,
+    n.autor_nick,
+    u.datos->>'$.nyape'      AS autor
+FROM noticias n
+JOIN usuarios u ON u.nick = n.autor_nick
+WHERE u.apellido = 'Gonzalez'
+ORDER BY n.fecha;
 \end{lstlisting}
 
+\textit{Diferencias relevantes con MongoDB:}
+
+\begin{itemize}
+    \item \texttt{\$lookup + \$unwind} se reemplaza por un \texttt{JOIN} clásico. Es más simple y, con índices, más eficiente: el optimizador puede usar \emph{hash join} o \emph{merge join}.
+    \item \texttt{\$split} + \texttt{\$arrayElemAt} se reemplaza por \texttt{SUBSTRING\_INDEX(..., ' ', -1)}. Más conciso, pero menos expresivo si el formato del campo concatenado fuera más complejo.
+    \item Para que la regex \texttt{/gonzalez\$/i} de MongoDB sea equivalente, en MySQL se puede usar \texttt{REGEXP '(?i)gonzalez\$'} en lugar de la igualdad estricta (\texttt{apellido = 'Gonzalez'}); la igualdad asume que la columna generada normalizó la capitalización.
+    \item MySQL \emph{no} tiene un equivalente directo del aggregation pipeline; los reportes analíticos se hacen con SQL + \texttt{WITH} (CTEs) o con \texttt{GROUP BY} clásico, y son menos componibles que la cadena de etapas de MongoDB.
+\end{itemize}
+
 % =====================================================
-\section{Conclusiones}
+\section*{Conclusiones}
+\addcontentsline{toc}{section}{Conclusiones}
 % =====================================================
 
 El práctico recorre tres capas del trabajo con datos semiestructurados:
 
 \begin{enumerate}
-    \item \textbf{Consultas sobre JSON} (Ejercicio 1): JsonPath es a
-    JSON lo que XPath es a XML. Ofrece operadores de navegación
-    (\texttt{.}, \texttt{[*]}, \texttt{..}), filtrado (\texttt{[?(...)]})
-    y agregaciones (\texttt{length}, \texttt{min}, \texttt{max},
-    \texttt{avg}).
-    \item \textbf{Generación de JSON desde código} (Ejercicio 2):
-    el caso típico es leer un modelo relacional y emitir un documento
-    JSON \emph{aplanado}. Gson resuelve la serialización; la lógica de
-    agrupado (facturas con sus items) queda del lado de la aplicación.
-    \item \textbf{Modelado documental con MongoDB} (Ejercicios 3--5):
-    las decisiones de embedding vs referencing, las claves de negocio
-    y los índices únicos son las herramientas para representar un E/R
-    sin perder integridad. El aggregation framework cubre la mayoría
-    de las consultas no triviales, incluyendo joins lógicos con
-    \texttt{\$lookup}.
+    \item \textbf{Consultas sobre JSON} (Ejercicio 1): JsonPath es a JSON lo que XPath es a XML. Ofrece operadores de navegación (\texttt{.}, \texttt{[*]}, \texttt{..}), filtrado (\texttt{[?(...)]}) y agregaciones.
+    \item \textbf{Generación de JSON desde código} (Ejercicio 2): el caso típico es leer un modelo relacional y emitir un documento JSON \emph{aplanado}. Gson resuelve la serialización; la lógica de agrupado queda del lado de la aplicación. MySQL 8+ permite el mismo resultado en una sola sentencia SQL con \texttt{JSON\_OBJECT} y \texttt{JSON\_ARRAYAGG}.
+    \item \textbf{Modelado documental con MongoDB} (Ejercicios 3--5): las decisiones de embedding vs referencing, las claves de negocio y los índices únicos son las herramientas para representar un E/R sin perder integridad. El aggregation framework cubre la mayoría de las consultas no triviales, incluyendo joins lógicos con \texttt{\$lookup}.
 \end{enumerate}
 
-La idea común detrás del práctico es: \emph{el modelo documental no es
-``relacional sin reglas''}. Tiene sus propias buenas prácticas
-(embedding por composición, referencing por relaciones independientes,
-validación con \texttt{\$jsonSchema}, índices) y sus propias
-herramientas de consulta (JsonPath para JSON aislado, pipeline de
-agregación para MongoDB).
+La idea común detrás del práctico es: \emph{el modelo documental no es ``relacional sin reglas''}. Tiene sus propias buenas prácticas (embedding por composición, referencing por relaciones independientes, validación con \texttt{\$jsonSchema}, índices) y sus propias herramientas de consulta. Pero también es importante reconocer que \textbf{MySQL 8+ implementa JSON nativo} con funciones potentes: para muchos casos de uso donde no se necesitan replicación distribuida ni esquemas verdaderamente dinámicos, una tabla con columna \texttt{JSON} y columnas generadas indexadas es una alternativa razonable a MongoDB, conservando transacciones ACID y SQL relacional.
 
 \end{document}

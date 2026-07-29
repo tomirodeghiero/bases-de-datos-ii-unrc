@@ -1,0 +1,677 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación e idioma ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla,es-noshorthands]{babel}
+\usepackage{lmodern}
+
+% --- Geometría y formato general ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{topsep=2pt,itemsep=2pt,parsep=0pt}
+
+% --- Tablas y diagramas ---
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,shapes.geometric,trees,fit}
+
+% --- Cabeceras y numeración ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bases de Datos II}
+\fancyhead[R]{\small Examen Final --- 2017}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Color y código ---
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codekw}{RGB}{0,0,180}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecmt}{RGB}{0,128,0}
+\definecolor{notebg}{RGB}{255,250,230}
+\definecolor{noteframe}{RGB}{220,180,80}
+
+\usepackage{listings}
+\lstdefinelanguage{SQLext}[]{SQL}{
+    morekeywords={SELECT,FROM,WHERE,JOIN,ON,AND,OR,GROUP,BY,ORDER,
+        INSERT,UPDATE,DELETE,EXPLAIN,ANALYZE,GRANT,REVOKE,
+        CREATE,USER,ROLE,TO,WITH,OPTION,REFERENCES,IDENTIFIED,
+        VARCHAR,DECIMAL,INTEGER,DATE},
+    sensitive=false,
+    morecomment=[l]{--},
+    morestring=[b]'
+}
+\lstdefinestyle{sqlstyle}{
+    language=SQLext,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecmt}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt,
+    tabsize=2
+}
+\lstdefinestyle{plain}{
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    xleftmargin=0.4em,
+    xrightmargin=0.4em,
+    aboveskip=8pt,
+    belowskip=8pt
+}
+\lstset{style=sqlstyle}
+
+% --- Cajas de nota ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{nota}{colback=notebg,colframe=noteframe,arc=2pt,
+    left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0.6pt}
+
+% --- Hipervínculos ---
+\usepackage[hidelinks,bookmarks=true]{hyperref}
+
+% --- Comandos auxiliares ---
+\newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+\newcommand{\bloqueConsigna}{\itemcabecera{Consigna}}
+\newcommand{\bloqueIdea}{\itemcabecera{Idea}}
+\newcommand{\bloqueRespuesta}{\itemcabecera{Respuesta}}
+\newcommand{\bloqueEjemplo}{\itemcabecera{Ejemplo}}
+
+\title{Examen Final --- Bases de Datos II\\[4pt]
+       \large 2017\\[4pt]
+       \large Resolución de estudio}
+\author{Tomás Rodeghiero}
+\date{2026}
+
+\begin{document}
+
+% =====================================================
+% Carátula
+% =====================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+
+    {\large \textbf{Universidad Nacional de Río Cuarto}}\\[6pt]
+    {\normalsize Facultad de Ciencias Exactas, Físico-Químicas y Naturales}\\[4pt]
+    {\normalsize Departamento de Computación}\\[3cm]
+
+    {\Large \textbf{Bases de Datos II}}\\[1.2cm]
+
+    {\Large \textbf{Examen Final --- 2017}}\\[6pt]
+    {\large Resolución de estudio}\\[3cm]
+
+    \begin{tabular}{rl}
+        \textbf{Alumno:} & Tomás Rodeghiero \\[4pt]
+        \textbf{Año de estudio:} & 2026 \\
+    \end{tabular}
+
+    \vfill
+    {\small Resolución basada en los Teóricos 2 (DCL), 6 (Procesamiento), 7 (Optimización) y 8 (Transacciones).}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introducción}
+% =====================================================
+
+El examen 2017 consta de cinco preguntas teóricas. Tres ya aparecieron en exámenes anteriores (marcas temporales, procesamiento de consultas), pero se desarrollan aquí en formato completo para que la guía sea autocontenida. Las dos preguntas nuevas respecto del 2016 son seguridad en SQL (Pregunta 1) y heurísticas de optimización (Pregunta 4); la Pregunta 5 cambia de Merge Join (2016) a Hash Join (2017).
+
+Mapa de las preguntas con los teóricos del cuatrimestre:
+
+\begin{itemize}
+    \item Pregunta 1 $\to$ Teórico 2 + Práctico 2: seguridad/DCL.
+    \item Pregunta 2 $\to$ Teórico 8 + Práctico 6 Ej. 3: protocolo de marcas temporales.
+    \item Pregunta 3 $\to$ Teórico 6: pipeline de procesamiento.
+    \item Pregunta 4 $\to$ Teórico 7: optimización heurística vs por costos.
+    \item Pregunta 5 $\to$ Teórico 6: algoritmo de Hash Join.
+\end{itemize}
+
+% =====================================================
+\section{Pregunta 1: Seguridad en SQL}
+% =====================================================
+
+\bloqueConsigna
+
+Desarrolle seguridad en SQL.
+
+\bloqueIdea
+
+La seguridad en SQL es el subsistema que decide \emph{quién puede hacer qué} contra la base de datos. Se compone de tres capas: \textbf{autenticación} (verificar la identidad del usuario que se conecta), \textbf{autorización} (qué privilegios tiene esa identidad sobre cada objeto) y \textbf{auditoría} (registro de quién hizo qué y cuándo). El subconjunto del lenguaje SQL que maneja la autorización se llama \textbf{DCL} (\emph{Data Control Language}) y se centra en dos verbos: \texttt{GRANT} y \texttt{REVOKE}.
+
+\bloqueRespuesta
+
+\textit{1. Identidades.}
+
+\begin{itemize}
+    \item \textbf{Usuarios}: cuentas individuales con credenciales (\texttt{CREATE USER nombre IDENTIFIED BY 'clave'}). En MySQL la identidad efectiva es el par \texttt{'usuario'@'host'}: \texttt{'juan'@'localhost'} y \texttt{'juan'@'\%'} son cuentas distintas.
+    \item \textbf{Roles} (PostgreSQL, MySQL 8+, Oracle): agrupaciones nombradas de privilegios. Se crean con \texttt{CREATE ROLE} y se asignan a usuarios con \texttt{GRANT rol TO usuario}. En PostgreSQL no hay diferencia entre usuario y rol; solo el flag \texttt{LOGIN} indica si una identidad puede iniciar sesión.
+\end{itemize}
+
+\textit{2. Privilegios.} El estándar define privilegios sobre objetos del esquema:
+
+\begin{itemize}
+    \item \texttt{SELECT}, \texttt{INSERT}, \texttt{UPDATE}, \texttt{DELETE}: las cuatro operaciones DML básicas.
+    \item \texttt{REFERENCES}: permite que la tabla del usuario apunte con una FK a esta tabla.
+    \item \texttt{EXECUTE}: invocar funciones y procedimientos.
+    \item \texttt{ALL PRIVILEGES}: atajo para todos los anteriores.
+\end{itemize}
+
+Los privilegios pueden ser de \textbf{grano fino}: \texttt{GRANT SELECT (apellido, nombre) ON cliente TO ...} otorga lectura solo de esas columnas, no de la tabla entera. \texttt{GRANT UPDATE (descripcion)} hace lo mismo para escritura. Oracle no soporta \texttt{SELECT(col)}; el workaround idiomático es crear una \emph{vista} que proyecte solo las columnas autorizadas y otorgar \texttt{SELECT} sobre la vista.
+
+\textit{3. \texttt{GRANT} y \texttt{REVOKE}.}
+
+\begin{lstlisting}
+-- Otorgar
+GRANT SELECT, INSERT ON practico1a.cliente
+    TO 'vendedor'@'localhost';
+
+-- Otorgar con delegacion (el receptor puede a su vez otorgar)
+GRANT UPDATE (descripcion) ON practico1a.producto
+    TO 'admin'@'localhost'
+    WITH GRANT OPTION;
+
+-- Revocar
+REVOKE INSERT ON practico1a.cliente
+    FROM 'vendedor'@'localhost';
+
+-- Revocar todo (limpieza total)
+REVOKE ALL PRIVILEGES, GRANT OPTION
+    FROM 'vendedor'@'localhost';
+\end{lstlisting}
+
+\texttt{WITH GRANT OPTION} permite cadenas de delegación: \texttt{A} le da el privilegio a \texttt{B} con opción de delegar; \texttt{B} se lo da a \texttt{C}. Si \texttt{A} luego revoca de \texttt{B}, en motores con \texttt{CASCADE} se revoca también de \texttt{C}.
+
+\textit{4. Vistas como mecanismo de seguridad.} Una \emph{vista} proyectiva permite exponer un subconjunto controlado de columnas o filas:
+
+\begin{lstlisting}
+CREATE VIEW vw_cliente_publico AS
+SELECT nro_cliente, apellido, nombre FROM cliente;
+
+GRANT SELECT ON vw_cliente_publico TO 'consultor'@'localhost';
+-- El consultor no ve direccion ni telefono
+\end{lstlisting}
+
+\textit{5. Restricciones de conexión y recursos.}
+
+\begin{itemize}
+    \item En MySQL, \texttt{ALTER USER ... WITH MAX\_CONNECTIONS\_PER\_HOUR n MAX\_QUERIES\_PER\_HOUR m}.
+    \item En Oracle, \texttt{CREATE PROFILE ... LIMIT CONNECT\_TIME n} y \texttt{ALTER USER ... PROFILE p}; \texttt{ALTER USER ... PASSWORD EXPIRE} fuerza renovación de contraseña.
+    \item En PostgreSQL, el control de conexiones por host vive en \texttt{pg\_hba.conf}; los recursos se limitan con extensiones (pg\_stat\_statements, pgbouncer).
+\end{itemize}
+
+\textit{6. Inyección SQL y \texttt{PreparedStatement}.} Concatenar valores de usuario en el SQL es la vulnerabilidad más común: si el cliente envía \texttt{nombre = "Pedro'; DROP TABLE cliente; --"}, una concatenación ingenua ejecuta el \texttt{DROP}. La defensa es usar \texttt{PreparedStatement} con placeholders \texttt{?} (en JDBC) o \texttt{\$1, \$2} (en libpq): la sentencia y los valores viajan por separado, el motor nunca interpreta los valores como código SQL.
+
+\textit{7. Principio de mínimo privilegio.} Cada usuario debe tener solo los permisos estrictamente necesarios. El idioma típico es: \texttt{vendedor} solo \texttt{INSERT} sobre \texttt{factura}; \texttt{administrador} solo \texttt{UPDATE(descripcion)} sobre \texttt{producto}; no se otorga \texttt{ALL PRIVILEGES} salvo a cuentas administrativas.
+
+\textit{8. Verificación.} Los catálogos exponen los permisos vigentes:
+
+\begin{itemize}
+    \item MySQL: \texttt{SHOW GRANTS FOR 'usuario'@'host';}
+    \item PostgreSQL: \texttt{information\_schema.role\_table\_grants}, \texttt{column\_privileges}, \texttt{pg\_roles}, funciones \texttt{has\_table\_privilege}, \texttt{has\_column\_privilege}.
+    \item Oracle: \texttt{DBA\_TAB\_PRIVS}, \texttt{DBA\_ROLE\_PRIVS}, \texttt{DBA\_USERS}.
+\end{itemize}
+
+\bloqueEjemplo
+
+Escenario típico de práctico: tres usuarios sobre la base \texttt{practico1a\_mysql} con privilegios distintos.
+
+\begin{lstlisting}
+-- Crear usuarios
+CREATE USER 'vendedor1'@'localhost'    IDENTIFIED BY 'Vendedor1!';
+CREATE USER 'vendedor2'@'localhost'    IDENTIFIED BY 'Vendedor2!';
+CREATE USER 'administrador'@'localhost' IDENTIFIED BY 'Admin!';
+
+-- vendedor1: solo puede insertar clientes (sin delegacion)
+GRANT INSERT ON practico1a_mysql.cliente
+    TO 'vendedor1'@'localhost';
+
+-- vendedor2: insertar facturas y leer columnas de producto
+GRANT INSERT ON practico1a_mysql.factura
+    TO 'vendedor2'@'localhost';
+GRANT SELECT (cod_producto, descripcion, precio)
+    ON practico1a_mysql.producto
+    TO 'vendedor2'@'localhost';
+
+-- administrador: actualizar la descripcion del producto, delegable
+GRANT UPDATE (descripcion) ON practico1a_mysql.producto
+    TO 'administrador'@'localhost'
+    WITH GRANT OPTION;
+
+-- Todos pueden borrar clientes
+GRANT DELETE ON practico1a_mysql.cliente
+    TO 'vendedor1'@'localhost',
+       'vendedor2'@'localhost',
+       'administrador'@'localhost';
+
+-- Verificacion
+SHOW GRANTS FOR 'administrador'@'localhost';
+
+-- Revocar todo a vendedor2 al final del ciclo
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'vendedor2'@'localhost';
+\end{lstlisting}
+
+% =====================================================
+\section{Pregunta 2: Protocolo de ordenamiento por marcas temporales}
+% =====================================================
+
+\bloqueConsigna
+
+Explique el protocolo de ordenamientos por Marcas temporales. Ejemplifique.
+
+\bloqueIdea
+
+El protocolo de \emph{marcas temporales} (\emph{timestamp ordering}) es un mecanismo \textbf{pesimista, no basado en bloqueos} para garantizar \emph{serializabilidad por conflicto}. Cada transacción $T_i$ recibe al ingresar al sistema una marca temporal $MT(T_i)$ única y monótonamente creciente. El protocolo garantiza que la planificación resultante sea equivalente al orden serial de las marcas: si $MT(T_i) < MT(T_j)$, todo conflicto se resuelve como si $T_i$ se hubiera ejecutado antes que $T_j$. A diferencia de 2PL, no produce deadlocks (no hay esperas), pero sí puede generar rollbacks en cascada y starvation.
+
+\bloqueRespuesta
+
+\textit{Estructuras que mantiene el protocolo.} Cada ítem $Q$ tiene dos marcas:
+
+\begin{itemize}
+    \item $MT\text{-}E(Q)$: mayor marca temporal de las transacciones que escribieron $Q$ con éxito.
+    \item $MT\text{-}L(Q)$: mayor marca temporal de las transacciones que leyeron $Q$ con éxito.
+\end{itemize}
+
+\textit{Reglas de validación.}
+
+\textit{$T_i$ ejecuta $r(Q)$:}
+\begin{itemize}
+    \item Si $MT(T_i) < MT\text{-}E(Q)$ $\Rightarrow$ rechazo. $T_i$ querría leer una versión ya sobrescrita; rollback y reinicio con marca nueva.
+    \item En otro caso $\Rightarrow$ se ejecuta y $MT\text{-}L(Q) \gets \max(MT\text{-}L(Q),\,MT(T_i))$.
+\end{itemize}
+
+\textit{$T_i$ ejecuta $w(Q)$:}
+\begin{itemize}
+    \item Si $MT(T_i) < MT\text{-}L(Q)$ $\Rightarrow$ rechazo. El valor de $T_i$ ya fue necesario por una lectura posterior; rollback.
+    \item Si $MT(T_i) < MT\text{-}E(Q)$ $\Rightarrow$ rechazo. $T_i$ querría escribir una versión obsoleta; rollback.
+    \item En otro caso $\Rightarrow$ se ejecuta y $MT\text{-}E(Q) \gets MT(T_i)$.
+\end{itemize}
+
+\textit{Propiedades.}
+
+\begin{itemize}
+    \item Garantiza serializabilidad por conflicto; el orden serial equivalente es el de las marcas.
+    \item Libre de deadlocks: no hay esperas.
+    \item Sufre rollbacks en cascada si combinamos con escrituras inmediatas; se mitiga con escritura diferida hasta commit.
+    \item Posible starvation: una transacción larga puede ser abortada repetidamente si llega tarde respecto del orden global.
+\end{itemize}
+
+\bloqueEjemplo
+
+Sean $T_1, T_2, T_3$ con $MT = 1, 2, 3$.
+
+\begin{itemize}
+    \item $T_1$: \texttt{r(X); w(X); r(Y); w(Y);}
+    \item $T_2$: \texttt{r(X); w(X);}
+    \item $T_3$: \texttt{r(Y); w(Y);}
+\end{itemize}
+
+Estado inicial: $MT\text{-}E = MT\text{-}L = 0$ para $X$ e $Y$.
+
+Schedule: $r_1(X), w_1(X), r_2(X), w_2(X), r_1(Y), w_1(Y), r_3(Y), w_3(Y)$.
+
+\begin{center}
+\small
+\begin{tabular}{r l l rrrr}
+\toprule
+Paso & Op. & Validación & $MT\text{-}E(X)$ & $MT\text{-}L(X)$ & $MT\text{-}E(Y)$ & $MT\text{-}L(Y)$ \\
+\midrule
+0 & inicio & --- & 0 & 0 & 0 & 0 \\
+1 & $r_1(X)$ & $1 \ge 0$ OK & 0 & 1 & 0 & 0 \\
+2 & $w_1(X)$ & OK & 1 & 1 & 0 & 0 \\
+3 & $r_2(X)$ & $2 \ge 1$ OK & 1 & 2 & 0 & 0 \\
+4 & $w_2(X)$ & OK & 2 & 2 & 0 & 0 \\
+5 & $r_1(Y)$ & $1 \ge 0$ OK & 2 & 2 & 0 & 1 \\
+6 & $w_1(Y)$ & OK & 2 & 2 & 1 & 1 \\
+7 & $r_3(Y)$ & $3 \ge 1$ OK & 2 & 2 & 1 & 3 \\
+8 & $w_3(Y)$ & OK & 2 & 2 & 3 & 3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Sin rollbacks; orden serial equivalente $T_1, T_2, T_3$.
+
+\textit{Caso con rollback.} Si el schedule fuera $r_2(X), w_2(X), w_1(X)$: en el paso 3, $MT(T_1) = 1 < MT\text{-}E(X) = 2$ $\Rightarrow$ rechazo, $T_1$ aborta y reinicia con marca nueva ($MT(T_1) = 4$ por ejemplo).
+
+% =====================================================
+\section{Pregunta 3: Pasos en el procesamiento de una consulta SQL}
+% =====================================================
+
+\bloqueConsigna
+
+Explique los diferentes pasos en el procesamiento de una consulta SQL por parte de un motor de bases de datos. Dé un ejemplo de una consulta como se va transformando en el proceso.
+
+\bloqueIdea
+
+Una consulta SQL no se ejecuta tal como llega del cliente: el motor la atraviesa por un pipeline de cinco etapas que convierten progresivamente texto $\to$ árbol sintáctico $\to$ árbol algebraico $\to$ plan físico $\to$ ejecución. Las primeras etapas son determinísticas (parsing, validación); las del medio (optimización lógica y física) son donde el motor elige entre planes equivalentes basándose en estadísticas; la última (ejecución) llama al storage engine.
+
+\bloqueRespuesta
+
+\textit{Pipeline canónico:}
+
+\begin{enumerate}
+    \item \textbf{Parsing.} El parser tokeniza el texto y arma un \emph{árbol sintáctico}. Detecta errores de sintaxis.
+    \item \textbf{Validación semántica.} Consulta el catálogo (\texttt{pg\_catalog}, \texttt{INFORMATION\_SCHEMA}) para verificar que las tablas y columnas existen, que los tipos son compatibles y que el usuario tiene permisos. Resuelve identificadores ambiguos.
+    \item \textbf{Traducción a álgebra relacional.} El árbol sintáctico se mapea a operadores algebraicos: \texttt{FROM} $\to$ producto/join, \texttt{WHERE} $\to \sigma$, \texttt{SELECT} $\to \Pi$, \texttt{GROUP BY} $\to \gamma$, \texttt{ORDER BY} $\to$ sort. Resultado: \emph{árbol de consulta inicial}.
+    \item \textbf{Optimización.}
+    \begin{itemize}
+        \item \emph{Lógica (heurística)}: aplica reglas de equivalencia (push-down de selecciones y proyecciones, reordenamiento de joins). Produce el \emph{árbol algebraico optimizado}.
+        \item \emph{Física (por costos)}: para cada operador elige un algoritmo concreto (índice vs scan, nested loop vs hash vs merge join) usando estadísticas. Produce el \emph{plan de ejecución}.
+    \end{itemize}
+    \item \textbf{Ejecución.} El plan se traduce a iteradores; cada uno pide tuplas al de abajo en pipeline; el storage engine sirve bloques.
+\end{enumerate}
+
+Las etapas 1--2 fallan con errores SQL clásicos (\texttt{syntax error}, \texttt{column does not exist}). La etapa 4 es la que muestra \texttt{EXPLAIN}/\texttt{EXPLAIN ANALYZE}. Para influir en la etapa 4 hay tres palancas: agregar/quitar índices, refrescar estadísticas con \texttt{ANALYZE}, o reescribir la consulta.
+
+\bloqueEjemplo
+
+Consulta:
+
+\begin{lstlisting}
+SELECT c.nombre, c.apellido, f.monto
+FROM cliente c
+JOIN factura f ON c.nro_cliente = f.nro_cliente
+WHERE f.monto > 100000
+ORDER BY f.monto DESC;
+\end{lstlisting}
+
+\textit{Paso 1 --- Parsing.} Árbol sintáctico con nodos \emph{Project / Join / Filter / Sort}.
+
+\textit{Paso 2 --- Validación.} Catálogo: \texttt{cliente.nombre}, \texttt{cliente.apellido}, \texttt{factura.monto}, \texttt{factura.nro\_cliente} existen y son compatibles.
+
+\textit{Paso 3 --- Álgebra (inicial):}
+\[
+\Pi_{nombre,\,apellido,\,monto}\big(\sigma_{f.monto > 100000}(cliente \bowtie_{nro\_cliente} factura)\big)
+\]
+
+\textit{Paso 4a --- Optimización lógica.} Push-down del \texttt{WHERE} a la rama de \texttt{factura}:
+\[
+\Pi_{\ldots}\big(cliente \bowtie \sigma_{monto > 100000}(factura)\big)
+\]
+
+\textit{Paso 4b --- Optimización física.} Con índice sobre \texttt{factura.monto} y PK en \texttt{cliente.nro\_cliente}:
+
+\begin{lstlisting}[style=plain]
+Sort  (key=f.monto DESC)
+  -> Nested Loop
+       -> Index Scan using idx_factura_monto on factura f
+            Index Cond: (f.monto > 100000)
+       -> Index Scan using pk_cliente on cliente c
+            Index Cond: (c.nro_cliente = f.nro_cliente)
+\end{lstlisting}
+
+\textit{Paso 5 --- Ejecución.} El \emph{Index Scan} filtra \texttt{factura}; por cada match, el \emph{Nested Loop} hace un lookup en \texttt{cliente}; el \emph{Sort} acumula y emite ordenado.
+
+% =====================================================
+\section{Pregunta 4: Heurísticas en optimización de consultas}
+% =====================================================
+
+\bloqueConsigna
+
+¿Qué es una heurística? ¿Cuáles se utilizan en optimización de consultas?
+
+\bloqueIdea
+
+Una \textbf{heurística} es una regla práctica que, sin garantía formal, \emph{mejora el resultado en la mayoría de los casos}. En optimización de consultas las heurísticas se usan en la etapa \emph{lógica} del optimizador (Teórico 7): reescriben el árbol algebraico aplicando reglas de equivalencia que casi siempre bajan el costo, sin necesidad de mirar estadísticas. Son complementarias a la optimización \emph{por costos}, que sí consulta el catálogo para elegir el plan físico más barato entre los candidatos.
+
+\bloqueRespuesta
+
+\textit{Heurística vs optimización por costos.}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Aspecto & Heurística & Por costos \\
+\midrule
+Entrada      & Árbol algebraico         & Árbol + estadísticas catálogo \\
+Salida       & Árbol equivalente mejor  & Plan físico de menor costo \\
+Garantía     & ``Casi siempre mejora''  & Óptimo en el espacio considerado \\
+Velocidad    & Muy rápida (reglas locales) & Lenta (enumera planes) \\
+Ejemplo      & ``Empujar $\sigma$ a las hojas'' & ``Usar índice si selectividad $<$ 5\%'' \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+En la práctica los motores los combinan: primero heurística para podar el espacio de búsqueda, después costos para elegir el mejor plan físico.
+
+\textit{Reglas heurísticas canónicas (Teórico 7).}
+
+\begin{enumerate}
+    \item \textbf{Empujar selecciones hacia las hojas.} Si una selección $\sigma_\theta$ involucra atributos de una sola relación, se baja para que se evalúe antes de los joins. Achica la cardinalidad de los intermedios.
+    \[
+    \sigma_\theta(E_1 \bowtie E_2) \equiv \sigma_\theta(E_1) \bowtie E_2 \quad \text{si } \theta \text{ refiere solo a } E_1
+    \]
+    \item \textbf{Cascada de selecciones.} Una $\sigma$ conjuntiva se rompe en cadena para que cada predicado se pueda mover de manera independiente:
+    \[
+    \sigma_{\theta_1 \wedge \theta_2}(E) \equiv \sigma_{\theta_1}(\sigma_{\theta_2}(E))
+    \]
+    \item \textbf{Conmutatividad de selecciones.} Dos $\sigma$ consecutivas pueden permutarse sin cambiar el resultado:
+    \[
+    \sigma_{\theta_1}(\sigma_{\theta_2}(E)) \equiv \sigma_{\theta_2}(\sigma_{\theta_1}(E))
+    \]
+    Útil para ejecutar primero la más selectiva (la que descarta más filas).
+    \item \textbf{Push-down de proyecciones.} Una $\Pi$ se baja hasta que solo queden los atributos necesarios para el resto del árbol. Achica el ancho de tupla y, por lo tanto, el costo de I/O.
+    \[
+    \Pi_L(E_1 \bowtie E_2) \equiv \Pi_L(\Pi_{L_1}(E_1) \bowtie \Pi_{L_2}(E_2))
+    \]
+    \item \textbf{Reordenamiento de joins.} Joins son conmutativos ($E_1 \bowtie E_2 \equiv E_2 \bowtie E_1$) y asociativos ($(E_1 \bowtie E_2) \bowtie E_3 \equiv E_1 \bowtie (E_2 \bowtie E_3)$). La heurística pide ejecutar primero los joins cuyo resultado intermedio sea más pequeño (típicamente cuando uno de los atributos es clave en una de las relaciones).
+    \item \textbf{Reemplazar producto cartesiano + selección por join.} Si tras los pasos anteriores quedó $\sigma_\theta(E_1 \times E_2)$ con $\theta$ vinculando ambos, se transforma en $E_1 \bowtie_\theta E_2$, que ejecuta con algoritmo de join (mucho más barato).
+    \item \textbf{Eliminación de subexpresiones comunes.} Si un subárbol aparece dos veces en la consulta (ej. una vista referenciada dos veces), se computa una sola vez y se reutiliza.
+    \item \textbf{Materialización temprana de subconsultas.} Subconsultas correlacionadas se transforman en joins cuando es posible (\emph{decorrelation}).
+\end{enumerate}
+
+\textit{Por qué funcionan estas reglas.} Las primeras cinco son las que dominan en la práctica: \emph{cualquier} reducción de cardinalidad o ancho de tupla antes de un join se amplifica en las etapas siguientes. Una selección que descarta el 90\% de las filas de la rama \texttt{factura} achica el join por 10x; si está en un nodo bajo, el efecto se propaga al resto del plan.
+
+\bloqueEjemplo
+
+Consulta sobre el esquema del Práctico 1.a:
+
+\begin{lstlisting}
+SELECT c.apellido, f.nro_factura
+FROM cliente c, factura f
+WHERE c.nro_cliente = f.nro_cliente
+  AND f.monto > 100000
+  AND c.direccion LIKE 'San Martin%';
+\end{lstlisting}
+
+\textit{Árbol inicial (sin optimizar):}
+
+\[
+\Pi_{apellido,\,nro\_factura}\big(\sigma_\theta(cliente \times factura)\big)
+\]
+
+donde $\theta = $ \texttt{c.nro\_cliente = f.nro\_cliente AND f.monto > 100000 AND c.direccion LIKE 'San Martin\%'}.
+
+\textit{Paso 1 --- Cascada (R1):} $\sigma$ se rompe en tres:
+
+\[
+\sigma_{c.nro\_cliente=f.nro\_cliente}\big(\sigma_{f.monto>100000}(\sigma_{c.direccion\text{ LIKE 'San Martin\%'}}(cliente \times factura))\big)
+\]
+
+\textit{Paso 2 --- Push-down (regla 1):} cada $\sigma$ baja a la rama donde están sus atributos:
+
+\[
+\sigma_{c.nro\_cliente=f.nro\_cliente}\big(\sigma_{c.direccion \text{ LIKE \dots}}(cliente) \times \sigma_{f.monto>100000}(factura)\big)
+\]
+
+\textit{Paso 3 --- Producto+selección $\to$ join (regla 6):}
+
+\[
+\sigma_{c.direccion\text{ LIKE \dots}}(cliente) \bowtie_{nro\_cliente} \sigma_{f.monto>100000}(factura)
+\]
+
+\textit{Paso 4 --- Push-down de proyección (regla 4):}
+
+\[
+\Pi_{apellido,\,nro\_factura}\big(\Pi_{nro\_cliente,\,apellido}(\sigma_{\ldots}(cliente)) \bowtie \Pi_{nro\_cliente,\,nro\_factura}(\sigma_{\ldots}(factura))\big)
+\]
+
+Cada operador trabaja con tuplas más angostas; el join se hace sobre filas filtradas y con menos columnas. Sin estas heurísticas, el motor habría calculado primero $cliente \times factura$ (potencialmente millones de tuplas) y filtrado después, multiplicando el costo varias veces.
+
+% =====================================================
+\section{Pregunta 5: Algoritmo de Hash Join}
+% =====================================================
+
+\bloqueConsigna
+
+Explique el algoritmo de hash join.
+
+\bloqueIdea
+
+\emph{Hash Join} es uno de los tres algoritmos físicos canónicos para resolver un equi-join $r \bowtie_A s$ (junto con Nested Loop y Merge Join). Su idea es ahorrar la comparación cuadrática: en vez de comparar cada tupla de $r$ contra cada tupla de $s$, se construye una \textbf{tabla hash} sobre la relación más chica y se la consulta tupla por tupla con las de la relación más grande. Solo funciona para \emph{equi-joins} (igualdad sobre el atributo de join); no soporta condiciones de rango ni $\neq$.
+
+\bloqueRespuesta
+
+\textit{Variantes.}
+
+\begin{enumerate}
+    \item \textbf{In-memory hash join (Classic Hash Join).} La relación más chica (\emph{build}) cabe en memoria. Caso ideal.
+    \item \textbf{Grace Hash Join.} La build no cabe en memoria: se particionan \emph{ambas} relaciones en archivos en disco usando la misma función hash, y luego se hace classic hash join por cada partición.
+    \item \textbf{Hybrid Hash Join.} Mejora sobre Grace: mantiene la primera partición en memoria mientras se escribe el resto a disco, evitando una vuelta de I/O.
+\end{enumerate}
+
+\textit{Algoritmo (classic, build + probe):}
+
+\textit{Build phase.} Por cada tupla $t \in r$ (build, la chica), calcular $h(t.A)$ e insertarla en la celda correspondiente de la tabla hash $H$.
+
+\textit{Probe phase.} Por cada tupla $u \in s$ (probe, la grande), calcular $h(u.A)$, recorrer las tuplas de $H[h(u.A)]$ y, por cada $t$ en esa celda con $t.A = u.A$, emitir el par $(t, u)$.
+
+Pseudocódigo:
+
+\begin{lstlisting}[style=plain]
+// Build
+H = new HashTable
+for t in r:
+    H.insert(h(t.A), t)
+
+// Probe
+for u in s:
+    bucket = H.lookup(h(u.A))
+    for t in bucket:
+        if t.A == u.A:                  // chequeo final por colisiones
+            output (t, u)
+\end{lstlisting}
+
+\textit{Análisis de costo.}
+
+\begin{itemize}
+    \item \textbf{Classic hash join} (build cabe en memoria):
+    \[
+    \text{Costo} \approx b_r + b_s \quad \text{(transferencias)}
+    \]
+    Una pasada por cada relación.
+    \item \textbf{Grace hash join} con $M$ buffers en memoria y $b_r \le M^2$:
+    \[
+    \text{Costo} \approx 3(b_r + b_s)
+    \]
+    Cada relación se lee, se escribe particionada y se vuelve a leer en la fase de match.
+    \item \textbf{Hybrid hash join}: entre $b_r + b_s$ y $3(b_r + b_s)$, dependiendo de cuánto cabe de la primera partición en memoria.
+\end{itemize}
+
+\textit{Propiedades.}
+
+\begin{itemize}
+    \item \textbf{Asimétrico}: la relación elegida como build debe ser la más chica, porque la tabla hash vive en memoria. Si se equivoca el optimizador, la build no cabe y hay que ir a Grace.
+    \item \textbf{Solo equi-join}: la igualdad del atributo de join es esencial para que el hash agrupe los matches; rangos no se pueden hashear.
+    \item \textbf{No preserva orden} de salida (a diferencia de Merge Join). Si después hay \texttt{ORDER BY}, el motor agrega un \emph{Sort} arriba.
+    \item \textbf{Excelente para discos modernos} y memorias grandes: la build cabe casi siempre, y la probe es un scan secuencial sobre la grande.
+    \item \textbf{Sensible a la distribución de los datos}: si muchas tuplas de $s$ tienen el mismo valor de $A$, las celdas correspondientes se vuelven largas y la probe degrada a búsqueda lineal dentro del bucket.
+\end{itemize}
+
+\textit{Decisión del optimizador (cuándo se elige Hash Join).}
+
+\begin{itemize}
+    \item Cuando una relación es claramente más chica y cabe (parcialmente) en memoria.
+    \item Cuando no hay índices ordenados utilizables para Merge Join.
+    \item Cuando los inputs son grandes y un Nested Loop sería cuadrático.
+    \item Cuando el atributo de join es una igualdad pura.
+\end{itemize}
+
+\bloqueEjemplo
+
+Sean dos relaciones:
+
+\begin{center}
+\begin{tabular}{cc|cc}
+\toprule
+$r.A$ & $r.B$ & $s.A$ & $s.C$ \\
+\midrule
+1 & a & 1 & x \\
+2 & b & 1 & y \\
+3 & c & 2 & z \\
+  &   & 4 & w \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+$r$ es más chica $\Rightarrow$ build sobre $r$, probe con $s$.
+
+\textit{Build phase.} Asumiendo $h(v) = v \mod 4$:
+
+\begin{center}
+\begin{tabular}{c|l}
+\toprule
+Celda $h$ & Contenido \\
+\midrule
+0 &  \\
+1 & (1, a) \\
+2 & (2, b) \\
+3 & (3, c) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textit{Probe phase.} Por cada $u \in s$:
+
+\begin{itemize}
+    \item $u = (1, x)$: $h(1) = 1$ $\to$ celda contiene $(1, a)$. Igualdad real ($1 = 1$) $\Rightarrow$ emite $(1, a, x)$.
+    \item $u = (1, y)$: $h(1) = 1$ $\to$ misma celda. Emite $(1, a, y)$.
+    \item $u = (2, z)$: $h(2) = 2$ $\to$ celda contiene $(2, b)$. Emite $(2, b, z)$.
+    \item $u = (4, w)$: $h(4) = 0$ $\to$ celda vacía $\Rightarrow$ no emite nada.
+\end{itemize}
+
+Resultado: $\{(1,a,x), (1,a,y), (2,b,z)\}$. Total: 3 lecturas de $r$ (build) + 4 lecturas de $s$ (probe) = $b_r + b_s$ transferencias.
+
+\begin{nota}
+\textbf{En MySQL 8+.} Hash Join llegó en MySQL 8.0.18 (octubre 2019) y, desde 8.0.20, se aplica también a equi-joins con índices cuando el optimizador estima que es más barato que Merge Join o Nested Loop. En MySQL 5.7 solo existían Nested Loop y Block Nested Loop. Para forzar el algoritmo: hints \texttt{/*+ HASH\_JOIN(t1, t2) */} y \texttt{/*+ NO\_HASH\_JOIN(t1, t2) */}.
+\end{nota}
+
+% =====================================================
+\section*{Cierre}
+\addcontentsline{toc}{section}{Cierre}
+% =====================================================
+
+El examen 2017 cubre dos focos: seguridad y procesamiento/optimización.
+
+\begin{itemize}
+    \item \textbf{Seguridad} (Pregunta 1): la base es DCL (\texttt{GRANT}/\texttt{REVOKE}) con privilegios de grano fino, roles y vistas. El principio de mínimo privilegio y el uso de \texttt{PreparedStatement} contra SQL Injection son los dos pilares prácticos.
+    \item \textbf{Concurrencia} (Pregunta 2): marcas temporales como alternativa pesimista a 2PL.
+    \item \textbf{Procesamiento + optimización} (Preguntas 3, 4, 5): pipeline del motor, heurísticas de optimización lógica (push-down de $\sigma$ y $\Pi$, reordenamiento de joins) y algoritmos físicos (Hash Join).
+\end{itemize}
+
+La idea común detrás del examen es que \emph{el motor no es una caja negra}: tanto las decisiones de seguridad (qué le doy a quién) como las de performance (qué plan elige el optimizador) están explicitadas en SQL y se pueden inspeccionar con \texttt{SHOW GRANTS}, \texttt{EXPLAIN ANALYZE} y el catálogo. Saber cómo funcionan por dentro es lo que separa al ``usuario de SQL'' del ``programador de bases de datos''.
+
+\end{document}

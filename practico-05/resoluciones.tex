@@ -44,9 +44,10 @@
     morekeywords={NUMERIC,VARCHAR,DECIMAL,DATE,TIMESTAMP,
         BIGINT,VARCHAR2,NUMBER,SCHEMA,DATABASE,
         WITH,FROM,TO,ON,AS,AND,OR,IS,NOT,NULL,
-        INSERT,UPDATE,DELETE,SELECT,EXPLAIN,ANALYZE,BUFFERS,
+        INSERT,UPDATE,DELETE,SELECT,EXPLAIN,ANALYZE,BUFFERS,FORMAT,
         NATURAL,JOIN,CROSS,INNER,OUTER,LEFT,RIGHT,FULL,GROUP,BY,ORDER,
-        SET,RESET,CREATE,INDEX,IF,EXISTS,REFERENCES},
+        SET,RESET,CREATE,INDEX,IF,EXISTS,REFERENCES,
+        USE,FORCE,STRAIGHT\_JOIN,SHOW,STATUS,LIKE,OPTIMIZER\_TRACE},
     sensitive=false,
     morecomment=[l]{--},
     morestring=[b]'
@@ -103,6 +104,14 @@
 \newcommand{\proy}[1]{\Pi_{#1}}
 \newcommand{\jn}{\bowtie}
 
+% --- Comandos auxiliares (mismos que en Prácticos 1-4) ---
+\newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+\newcommand{\bloqueConsigna}{\itemcabecera{Consigna}}
+\newcommand{\bloqueIdea}{\itemcabecera{Idea}}
+\newcommand{\bloqueSolucion}{\itemcabecera{Soluci\'on}}
+\newcommand{\bloquePorque}{\itemcabecera{Por qu\'e funciona / por qu\'e es mejor}}
+\newcommand{\bloqueMySQL}{\itemcabecera{En MySQL 8+}}
+
 \title{Trabajo Práctico N.\textsuperscript{o} 5:
        Procesamiento y Optimización de Consultas\\[4pt]
        \large Bases de Datos II}
@@ -145,192 +154,85 @@
 \section{Introducción}
 % =====================================================
 
-El Práctico 5 cierra la parte del cuatrimestre dedicada a entender qué hace
-un motor de base de datos por dentro cuando recibe una consulta. Los cinco
-ejercicios cubren los tres bloques en los que se descompone el procesamiento
-de un \emph{query}:
+El Práctico 5 cierra la parte del cuatrimestre dedicada a entender qué hace un motor de base de datos por dentro cuando recibe una consulta. Los cinco ejercicios cubren los tres bloques en los que se descompone el procesamiento de un \emph{query}:
 
 \begin{itemize}
-    \item \textbf{Procesamiento físico}: qué algoritmo concreto se usa para
-    cada operación del álgebra relacional (Ejercicio~1).
-    \item \textbf{Optimización lógica}: cómo se reescribe el árbol de la
-    consulta usando reglas de equivalencia para bajar selecciones, ordenar
-    joins y reducir tamaños intermedios (Ejercicios~2 y~3).
-    \item \textbf{Catálogo y estadísticas}: dónde se guarda en PostgreSQL la
-    información que el \emph{planner} usa para decidir el plan, y cómo se
-    influye sobre el plan elegido (Ejercicios~4 y~5).
+    \item \textbf{Procesamiento físico}: qué algoritmo concreto se usa para cada operación del álgebra relacional (Ejercicio~1).
+    \item \textbf{Optimización lógica}: cómo se reescribe el árbol de la consulta usando reglas de equivalencia para bajar selecciones, ordenar joins y reducir tamaños intermedios (Ejercicios~2 y~3).
+    \item \textbf{Catálogo y estadísticas}: dónde se guarda en PostgreSQL la información que el \emph{planner} usa para decidir el plan, y cómo se influye sobre el plan elegido (Ejercicios~4 y~5).
 \end{itemize}
 
-La resolución se apoya en los Teóricos 6 (\emph{Procesamiento de
-Consultas}, algoritmos A1--A11, costo en bloques transferidos y búsquedas)
-y 7 (\emph{Optimización de Consultas}, reglas de equivalencia, optimización
-por costos y heurística).
+Cada ejercicio sigue siempre la misma estructura: \textbf{Consigna} (texto literal del PDF), \textbf{Idea} (lectura natural y concepto detrás), \textbf{Solución} (algoritmo, árbol algebraico, fórmula o SQL según corresponda), \textbf{Por qué funciona / por qué es mejor} (lógica de la transformación o de la elección) y \textbf{En MySQL 8+} (consulta equivalente y/o herramientas para inspeccionar el plan: \texttt{EXPLAIN ANALYZE}, \texttt{EXPLAIN FORMAT=JSON}, \texttt{optimizer\_trace}, hints).
 
 \begin{nota}
-\textbf{Notación.} A lo largo del documento se usa la notación clásica del
-álgebra relacional: $\sigma$ para selección, $\Pi$ para proyección y $\bowtie$
-para join (natural cuando no se aclara la condición). Para los costos se siguen
-las variables del Teórico~6: $t_T$ tiempo de transferencia de un bloque, $t_b$
-tiempo de búsqueda, $b_r$ bloques de la relación $r$, $n_r$ tuplas de $r$,
-$h_i$ altura del índice.
+\textbf{Notación.} A lo largo del documento se usa la notación clásica del álgebra relacional: $\sigma$ para selección, $\Pi$ para proyección y $\bowtie$ para join (natural cuando no se aclara la condición). Para los costos se siguen las variables del Teórico~6: $t_T$ tiempo de transferencia de un bloque, $t_b$ tiempo de búsqueda, $b_r$ bloques de la relación $r$, $n_r$ tuplas de $r$, $h_i$ altura del índice.
 \end{nota}
-
-\subsection*{Verificación de las resoluciones previas}
-
-Antes de redactar este documento se revisaron los \texttt{README} de cada
-ejercicio y los scripts SQL del Ejercicio~5. Conclusiones:
-
-\begin{itemize}
-    \item \textbf{Ejercicio~1}: la versión original eligió \textbf{A1} para
-    los incisos~(a) y~(b) interpretando que sólo existían los índices
-    secundarios listados en el enunciado. Se corrigió a \textbf{A3}
-    (igualdad sobre índice primario/único) y \textbf{A6} (rango sobre índice
-    primario), que son las respuestas más rigurosas: una clave primaria, en
-    cualquier implementación realista y en la convención del curso, tiene
-    asociado un índice único. Los incisos~(c)--(e) ya estaban correctos
-    (A5, A7, A10).
-    \item \textbf{Ejercicio~2}: las tres transformaciones por inciso son
-    correctas (cascada de selecciones, push-down y asociatividad/conmutatividad
-    de join). Se completaron árboles de expresión antes y después.
-    \item \textbf{Ejercicio~3}: estimación y orden estaban bien.
-    Se agregó la cota formal $|R\jn S|\le \min(n_r,n_s)$ cuando el atributo
-    común es clave, y la comparación cuantitativa de los dos órdenes posibles.
-    \item \textbf{Ejercicio~4}: las consultas a \texttt{information\_schema} y
-    \texttt{pg\_catalog} son correctas. Se reorganizó la información sobre qué
-    estadísticas guarda \texttt{pg\_stats} con explicación de su uso por el
-    planner.
-    \item \textbf{Ejercicio~5}: los scripts SQL (carga base, producto
-    cartesiano, catálogo, mejora con índice y fuerzo de \emph{merge join})
-    funcionan tal como están. Se sumó interpretación de los planes y la
-    justificación del cambio observado.
-\end{itemize}
 
 % =====================================================
 \section{Ejercicio 1: Algoritmos de selección}
 % =====================================================
 
-\paragraph{Enunciado.} Sobre la tabla
+\bloqueConsigna
 
-\[
-\texttt{curso(\underline{codigo}, nombre, cantidad\_inscriptos, cupo\_maximo)}
-\]
+Dado la siguiente tabla de una base de datos:
 
-con índice secundario sobre \texttt{cantidad\_inscriptos} y sobre
-\texttt{cupo\_maximo}, especificar qué algoritmo (A1--A11) se usaría para
-cada una de las consultas (a)--(e) y justificar.
+\[\texttt{curso(\underline{codigo}, nombre, cantidad\_inscriptos, cupo\_maximo)}\]
 
-\subsection{Marco teórico aplicado (Teórico 6)}
+Donde: codigo es clave primaria. Hay definido un índice secundario sobre el atributo \texttt{cantidad\_inscriptos}. Hay definido un índice secundario sobre el atributo \texttt{cupo\_maximo}.
 
-Los algoritmos relevantes son:
+Especifique qué algoritmos utilizaría (justifique) para las siguientes consultas:
+
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item $\sel{codigo = 1001}(curso)$
+    \item $\sel{codigo < 1000}(curso)$
+    \item $\sel{cantidad\_inscriptos = 40}(curso)$
+    \item $\sel{cantidad\_inscriptos < 50}(curso)$
+    \item $\sel{cantidad\_inscriptos = 50 \,\wedge\, cupo\_maximo > 40}(curso)$
+\end{enumerate}
+
+\bloqueIdea
+
+Se pide elegir, para cada selección, el algoritmo físico más eficiente entre los presentados en el Teórico 6 (A1--A11). La decisión depende de tres factores: si hay índice sobre el atributo del predicado, si la condición es de igualdad o de rango, y si hay varios predicados conjuntivos sobre atributos con índices distintos (caso de intersección de RIDs).
+
+\bloqueSolucion
+
+Los algoritmos relevantes del Teórico 6 son:
 
 \begin{itemize}
-    \item \textbf{A1}: búsqueda lineal. Aplicable en cualquier caso. Costo
-    $b_r\cdot t_T + t_b$; si la condición es por clave y hay igualdad, se
-    corta apenas se encuentra: $(b_r/2)\cdot t_T + t_b$.
+    \item \textbf{A1}: búsqueda lineal. Aplicable siempre. Costo $b_r\cdot t_T + t_b$; si la condición es por clave y hay igualdad, corta apenas encuentra: $(b_r/2)\cdot t_T + t_b$.
     \item \textbf{A2}: búsqueda binaria sobre archivo ordenado.
-    \item \textbf{A3}: igualdad sobre índice de clave primaria o único.
-    Recupera a lo sumo una tupla. Costo $(h_i+1)(t_T+t_b)$.
+    \item \textbf{A3}: igualdad sobre índice de clave primaria o único. A lo sumo una tupla. Costo $(h_i+1)(t_T+t_b)$.
     \item \textbf{A4}: igualdad sobre índice primario no único.
-    \item \textbf{A5}: igualdad sobre índice secundario. Si la clave no es
-    única puede devolver varios registros, cada uno en un bloque distinto.
+    \item \textbf{A5}: igualdad sobre índice secundario. Puede devolver varios registros, cada uno en bloque distinto.
     \item \textbf{A6}: rango sobre índice primario (recorre secuencialmente).
-    \item \textbf{A7}: rango sobre índice secundario. Para cada puntero, una
-    operación de I/O.
+    \item \textbf{A7}: rango sobre índice secundario. Por cada puntero, una I/O.
     \item \textbf{A8}: conjunción usando \emph{un} índice + chequeo en memoria.
     \item \textbf{A9}: conjunción usando un índice multiclave.
-    \item \textbf{A10}: conjunción por intersección de identificadores
-    (RIDs/punteros).
+    \item \textbf{A10}: conjunción por intersección de identificadores (RIDs/punteros).
     \item \textbf{A11}: disyunción por unión de identificadores.
 \end{itemize}
 
-\subsection{Resolución por inciso}
+\textit{Resolución por inciso:}
 
-\subsubsection*{a) $\sel{codigo = 1001}(\texttt{curso})$}
+\textit{a) $\sel{codigo = 1001}(curso)$:} \textbf{A3} (igualdad sobre índice primario/único). \texttt{codigo} es PK y, por convención del curso, toda PK lleva un índice único (B+tree). La condición es igualdad sobre ese atributo; A3 recupera a lo sumo una tupla con costo $(h_i+1)(t_T+t_b)$.
 
-Algoritmo: \textbf{A3} (igualdad sobre índice primario/único).
+\textit{b) $\sel{codigo < 1000}(curso)$:} \textbf{A6} (rango sobre índice primario). Misma convención de PK con índice. Si se interpreta la PK sin índice primario explícito, queda \textbf{A1}; en cualquier caso una solución con índice (B+tree) es preferible siempre que la selectividad no sea muy alta.
 
-\emph{Justificación.} \texttt{codigo} es clave primaria; por convención del
-curso (y por implementación real) toda PK lleva asociado un índice único, casi
-siempre un B+tree. La condición es igualdad sobre ese atributo. A3 recupera
-a lo sumo una tupla y su costo, comparado con un \emph{scan} completo, es muy
-bajo:
+\textit{c) $\sel{cantidad\_inscriptos = 40}(curso)$:} \textbf{A5} (igualdad sobre índice secundario). Hay índice secundario sobre el atributo y la condición es de igualdad. Como \texttt{cantidad\_inscriptos} no es clave, pueden satisfacer la condición varios registros, posiblemente uno por bloque. Costo peor caso $(h_i + n)(t_T+t_b)$ con $n$ = tuplas matcheadas.
 
-\[
-\text{Costo}_{A3} = (h_i + 1)\,(t_T + t_b)
-\]
+\textit{d) $\sel{cantidad\_inscriptos < 50}(curso)$:} \textbf{A7} (rango sobre índice secundario). Recorre las hojas del índice secundario para conseguir los punteros que cumplen $< 50$ y, por cada puntero, hace una I/O. Atractivo cuando la selectividad es baja; si la mayoría cumple, un \emph{Seq Scan} (A1) puede ser preferible.
 
-\emph{Interpretación estrictamente literal del enunciado.} Si se asumiera que
-sólo existen los índices que el enunciado menciona (los dos secundarios), no
-habría índice sobre \texttt{codigo}: el algoritmo aplicable sería \textbf{A1}
-con corte temprano por ser clave: $(b_r/2)\,t_T + t_b$. A3 es la respuesta
-más rigurosa.
-
-\subsubsection*{b) $\sel{codigo < 1000}(\texttt{curso})$}
-
-Algoritmo: \textbf{A6} (rango sobre índice primario).
-
-\emph{Justificación.} Misma convención que en~(a): la PK tiene índice
-asociado, y si se interpreta como índice primario (archivo organizado por
-\texttt{codigo}), se recorren las tuplas en orden desde el inicio hasta
-encontrar la primera que viole la condición.
-
-Si se interpreta la PK sólo como restricción de unicidad sin índice primario
-explícito, la respuesta cae en \textbf{A1} (búsqueda lineal completa). En
-cualquier caso, una solución con índice (B+tree) es preferible a $A_1$ siempre
-que la selectividad no sea muy alta.
-
-\subsubsection*{c) $\sel{cantidad\_inscriptos = 40}(\texttt{curso})$}
-
-Algoritmo: \textbf{A5} (igualdad sobre índice secundario).
-
-\emph{Justificación.} Hay índice secundario sobre
-\texttt{cantidad\_inscriptos}; la condición es de igualdad. Como
-\texttt{cantidad\_inscriptos} no es clave, pueden satisfacer la condición
-varios registros, posiblemente uno en cada bloque. Costo del peor caso:
-
-\[
-\text{Costo}_{A5} = (h_i + n)\,(t_T + t_b)
-\]
-
-donde $n$ es la cantidad de tuplas que cumplen la condición.
-
-\subsubsection*{d) $\sel{cantidad\_inscriptos < 50}(\texttt{curso})$}
-
-Algoritmo: \textbf{A7} (rango sobre índice secundario).
-
-\emph{Justificación.} Hay índice secundario sobre el atributo y la condición
-es de rango. A7 recorre las hojas del índice secundario para conseguir los
-punteros que cumplen $\texttt{cantidad\_inscriptos} < 50$ y luego, por cada
-puntero, hace una I/O para recuperar la tupla.
-
-\emph{Observación práctica.} A7 es atractivo cuando la selectividad es baja
-(pocos registros cumplen la condición). Si la mayoría de la tabla cumple
-$< 50$, un \emph{Seq Scan} (A1) puede ser preferible porque evita las
-operaciones de I/O salteadas que produce el índice secundario.
-
-\subsubsection*{e) $\sel{cantidad\_inscriptos = 50 \,\wedge\, cupo\_maximo > 40}(\texttt{curso})$}
-
-Algoritmo: \textbf{A10} (conjunción por intersección de identificadores).
-
-\emph{Justificación.} La consulta es una conjunción de dos condiciones,
-ambas con índice secundario disponible:
+\textit{e) $\sel{cantidad\_inscriptos = 50 \,\wedge\, cupo\_maximo > 40}(curso)$:} \textbf{A10} (intersección de identificadores). Hay índice secundario para cada condición:
 
 \begin{itemize}
-    \item $\texttt{cantidad\_inscriptos} = 50$ se resuelve con el índice de
-    \texttt{cantidad\_inscriptos} (lógica de A5) y devuelve un conjunto de
-    punteros $P_1$.
-    \item $\texttt{cupo\_maximo} > 40$ se resuelve con el índice de
-    \texttt{cupo\_maximo} (lógica de A7) y devuelve un conjunto $P_2$.
-    \item Se calcula $P_1 \cap P_2$ y se recuperan sólo las tuplas referidas
-    por los punteros que sobreviven.
+    \item $\texttt{cantidad\_inscriptos} = 50$ con el índice de \texttt{cantidad\_inscriptos} (lógica A5) devuelve $P_1$.
+    \item $\texttt{cupo\_maximo} > 40$ con el índice de \texttt{cupo\_maximo} (lógica A7) devuelve $P_2$.
+    \item Se calcula $P_1 \cap P_2$ y se recuperan sólo las tuplas que sobreviven.
 \end{itemize}
 
-\emph{Alternativas.} También sería válido A8 (elegir la condición más
-selectiva, recuperar por su índice y testear el resto en memoria). Si la
-condición más selectiva es la igualdad sobre \texttt{cantidad\_inscriptos},
-A8 con A5 puede ser una opción razonable y simple de implementar.
+Alternativa: A8 (elegir la condición más selectiva, recuperar por su índice, testear el resto en memoria); razonable si una condición es claramente más selectiva.
 
-\subsection{Resumen}
+\textit{Tabla resumen:}
 
 \begin{center}
 \begin{tabular}{cll}
@@ -346,11 +248,69 @@ e & $\texttt{cantidad\_inscriptos}=50 \wedge \texttt{cupo\_maximo}>40$ & A10 \\
 \end{tabular}
 \end{center}
 
+\bloquePorque
+
+\begin{itemize}
+    \item \textbf{Igualdad por PK (a)}: con un índice único, $h_i$ típicamente 3--4 bloques en B+tree; comparado contra $b_r$ páginas de un \emph{Seq Scan}, A3 es órdenes de magnitud más barato.
+    \item \textbf{Rango por PK (b)}: A6 aprovecha que el archivo está ordenado (o que el índice primario indica el orden físico) para recorrer secuencialmente los bloques que matchean.
+    \item \textbf{Índice secundario (c, d)}: el costo escala con el número de tuplas matcheadas (cada una potencialmente en un bloque distinto). Si la selectividad es muy alta, A1 puede ganar porque evita los saltos.
+    \item \textbf{Intersección de RIDs (e)}: combinar dos índices vía intersección permite recuperar sólo los bloques que cumplen \emph{ambas} condiciones, en vez de leer toda la tabla y filtrar. Si una condición es muy selectiva, A8 puede ser preferible por simplicidad.
+\end{itemize}
+
+\bloqueMySQL
+
+MySQL 8+ usa nombres distintos para los mismos algoritmos. \texttt{EXPLAIN} indica el algoritmo elegido en la columna \texttt{type} y/o \texttt{Extra}:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Teórico & MySQL \texttt{EXPLAIN.type} & Observación \\
+\midrule
+A1  & \texttt{ALL}              & Full table scan. \\
+A3  & \texttt{const} / \texttt{eq\_ref} & Igualdad por PK/UNIQUE. \\
+A5  & \texttt{ref}              & Igualdad por índice secundario. \\
+A6  & \texttt{range}            & Rango usando \texttt{PRIMARY}. \\
+A7  & \texttt{range}            & Rango usando índice secundario. \\
+A10 & \texttt{index\_merge}     & + \texttt{Extra: Using intersect(...)} \\
+A11 & \texttt{index\_merge}     & + \texttt{Extra: Using union(...)} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{lstlisting}
+-- Verificacion en MySQL (asumiendo practico5_mysql.curso con sus indices)
+EXPLAIN SELECT * FROM curso WHERE codigo = 1001;
+-- type=const  / key=PRIMARY                  -> A3
+
+EXPLAIN SELECT * FROM curso WHERE codigo < 1000;
+-- type=range  / key=PRIMARY                  -> A6
+
+EXPLAIN SELECT * FROM curso WHERE cantidad_inscriptos = 40;
+-- type=ref    / key=idx_curso_cantidad       -> A5
+
+EXPLAIN SELECT * FROM curso WHERE cantidad_inscriptos < 50;
+-- type=range  / key=idx_curso_cantidad       -> A7
+
+EXPLAIN SELECT * FROM curso
+WHERE cantidad_inscriptos = 50 AND cupo_maximo > 40;
+-- type=index_merge / Extra: Using intersect(idx_curso_cantidad, idx_curso_cupo);
+-- Using where                                 -> A10
+\end{lstlisting}
+
+\textit{Diferencias prácticas con PostgreSQL/Oracle:}
+
+\begin{itemize}
+    \item En MySQL/InnoDB, la tabla está \emph{clustered} por la PK: A3 y A6 no requieren un acceso extra a la tabla porque el índice y los datos viven en la misma estructura.
+    \item Si MySQL no detecta el \emph{index\_merge} y elige sólo uno de los índices, se puede forzar con la sintaxis \texttt{... FROM curso USE INDEX FOR ORDER BY (...)} o, más directamente, con la variable \texttt{optimizer\_switch} (\texttt{SET optimizer\_switch='index\_merge=on,index\_merge\_intersection=on'}).
+\end{itemize}
+
 % =====================================================
 \section{Ejercicio 2: Árbol de query y expresiones equivalentes}
 % =====================================================
 
-\paragraph{Enunciado.} Sobre el esquema
+\bloqueConsigna
+
+Dado el siguiente esquema de base de datos:
 
 \begin{itemize}
     \item \texttt{articulos(\underline{Nart}, desc, precio, cant, stock\_min, stock\_max)}
@@ -360,50 +320,41 @@ e & $\texttt{cantidad\_inscriptos}=50 \wedge \texttt{cupo\_maximo}>40$ & A10 \\
     \item \texttt{compran(\underline{Ncli, Nart})}
 \end{itemize}
 
-obtener, para cada consulta, el árbol de query inicial y \emph{tres}
-expresiones equivalentes, justificando cada paso.
+Obtenga el árbol de query y tres expresiones equivalentes (justifique cada paso de la transformación) para:
 
-\subsection{Marco teórico aplicado (Teórico 7)}
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item $\sel{descripcion = \text{``Pan Rallado''} \,\wedge\, precio\_venta < 15}(proveedor \jn provee \jn articulos)$
+    \item $\sel{precio>25}(cliente \jn compran \jn articulos)$
+\end{enumerate}
 
-Las transformaciones se apoyan en las \textbf{reglas de equivalencia} del
-Teórico~7:
+\bloqueIdea
+
+El ejercicio pide aplicar las \emph{reglas de equivalencia} del Teórico 7 para reescribir cada consulta en un árbol más eficiente. Las heurísticas centrales son: empujar selecciones hacia las hojas (achican cardinalidades antes de los joins), y reordenar los joins para que los resultados intermedios sean lo más pequeños posible.
+
+\bloqueSolucion
+
+Reglas relevantes del Teórico 7:
 
 \begin{itemize}
-    \item \textbf{R1} (cascada de selecciones):
-    $\sel{\theta_1 \wedge \theta_2}(E) \equiv \sel{\theta_1}(\sel{\theta_2}(E))$.
-    \item \textbf{R2} (conmutatividad de selecciones):
-    $\sel{\theta_1}(\sel{\theta_2}(E)) \equiv \sel{\theta_2}(\sel{\theta_1}(E))$.
-    \item \textbf{R5} (conmutatividad de join):
-    $E_1 \jn E_2 \equiv E_2 \jn E_1$.
-    \item \textbf{R6a} (asociatividad de join natural):
-    $(E_1 \jn E_2)\jn E_3 \equiv E_1 \jn (E_2 \jn E_3)$.
-    \item \textbf{R7a} (push-down de selección dentro de join, condición sobre
-    un solo operando):
-    $\sel{\theta_0}(E_1\jn E_2) \equiv \sel{\theta_0}(E_1)\jn E_2$ si
-    $\theta_0$ involucra sólo atributos de $E_1$.
-    \item \textbf{R7b} (push-down distributivo cuando la condición es
-    conjuntiva con partes que pertenecen a operandos distintos):
-    $\sel{\theta_1\wedge\theta_2}(E_1\jn E_2)\equiv \sel{\theta_1}(E_1)\jn
-    \sel{\theta_2}(E_2)$ si $\theta_1$ sólo refiere $E_1$ y $\theta_2$ sólo
-    a $E_2$.
+    \item \textbf{R1} (cascada): $\sel{\theta_1 \wedge \theta_2}(E) \equiv \sel{\theta_1}(\sel{\theta_2}(E))$.
+    \item \textbf{R2} (conmutatividad de $\sigma$): $\sel{\theta_1}(\sel{\theta_2}(E)) \equiv \sel{\theta_2}(\sel{\theta_1}(E))$.
+    \item \textbf{R5} (conmutatividad de $\jn$): $E_1 \jn E_2 \equiv E_2 \jn E_1$.
+    \item \textbf{R6a} (asociatividad): $(E_1 \jn E_2)\jn E_3 \equiv E_1 \jn (E_2 \jn E_3)$.
+    \item \textbf{R7a} (push-down sobre un operando): $\sel{\theta_0}(E_1\jn E_2) \equiv \sel{\theta_0}(E_1)\jn E_2$ si $\theta_0$ refiere sólo a $E_1$.
+    \item \textbf{R7b} (push-down distributivo): $\sel{\theta_1\wedge\theta_2}(E_1\jn E_2)\equiv \sel{\theta_1}(E_1)\jn \sel{\theta_2}(E_2)$ si cada $\theta_i$ refiere sólo a $E_i$.
 \end{itemize}
 
-La heurística principal del curso es \emph{empujar selecciones cerca de las
-hojas} (achican la cardinalidad), \emph{empujar proyecciones} (achican el
-ancho de tupla) y \emph{ordenar los joins} para minimizar el tamaño de los
-resultados intermedios.
+% --- a) ---
+\subsection{a) $\sel{desc = \text{``Pan Rallado''} \,\wedge\, precio\_venta < 15}(proveedor \jn provee \jn articulos)$}
 
-\subsection{a) $\sel{desc = \text{``Pan Rallado''} \,\wedge\, precio\_venta < 15}
-                (proveedor \jn provee \jn articulos)$}
-
-\subsubsection*{Expresión base $E_0$}
+\textit{Expresión base $E_0$:}
 
 \[
 E_0 \;=\; \sel{desc=\text{``Pan Rallado''}\,\wedge\, precio\_venta<15}\!\!\big(
 \,(proveedor \jn provee) \jn articulos\,\big)
 \]
 
-\paragraph{Árbol de $E_0$.}
+\textit{Árbol de $E_0$:}
 
 \begin{center}
 \begin{tikzpicture}[level distance=12mm, sibling distance=22mm,
@@ -417,38 +368,27 @@ E_0 \;=\; \sel{desc=\text{``Pan Rallado''}\,\wedge\, precio\_venta<15}\!\!\big(
 \end{tikzpicture}
 \end{center}
 
-\subsubsection*{Equivalente $E_1$ --- cascada de selecciones (R1)}
+\textit{Equivalente $E_1$ --- cascada de selecciones (R1):}
 
 \[
 E_1 \;=\; \sel{desc=\text{``Pan Rallado''}}\!\big(
 \sel{precio\_venta<15}\!\big((proveedor\jn provee)\jn articulos\big)\big)
 \]
 
-Se reemplazó una selección conjuntiva por dos selecciones encadenadas. Esto no
-mejora costo todavía pero habilita el paso siguiente: ahora cada $\sigma$
-involucra un sólo predicado y puede empujarse de manera independiente.
+Reemplaza la selección conjuntiva por dos encadenadas. No mejora costo todavía, pero habilita el push-down: cada $\sigma$ tiene un único predicado.
 
-\subsubsection*{Equivalente $E_2$ --- push-down por R7b}
+\textit{Equivalente $E_2$ --- push-down por R7b:}
 
-Análisis de atributos:
-
-\begin{itemize}
-    \item \texttt{precio\_venta} sólo está en \texttt{provee}.
-    \item \texttt{desc} sólo está en \texttt{articulos}.
-\end{itemize}
-
-Aplicando R7a/R7b se distribuye cada selección a la rama del join donde
-aparecen sus atributos:
+Atributos: \texttt{precio\_venta} sólo en \texttt{provee}; \texttt{desc} sólo en \texttt{articulos}. Aplicando R7a/R7b cada selección baja a la rama correspondiente:
 
 \[
 E_2 \;=\; \big(proveedor \jn \sel{precio\_venta<15}(provee)\big)
         \jn \sel{desc=\text{``Pan Rallado''}}(articulos)
 \]
 
-\subsubsection*{Equivalente $E_3$ --- reasociación (R5, R6a)}
+\textit{Equivalente $E_3$ --- reasociación (R5, R6a):}
 
-Conviene calcular primero el join entre las dos relaciones \emph{ya
-filtradas} (que son las más chicas):
+Conviene hacer primero el join entre las dos relaciones \emph{ya filtradas} (que son las más chicas):
 
 \[
 E_3 \;=\; proveedor \jn \big(\,
@@ -456,7 +396,7 @@ E_3 \;=\; proveedor \jn \big(\,
 \big)
 \]
 
-\paragraph{Árbol final ($E_3$).}
+\textit{Árbol final ($E_3$):}
 
 \begin{center}
 \begin{tikzpicture}[level distance=12mm, sibling distance=30mm,
@@ -471,21 +411,16 @@ E_3 \;=\; proveedor \jn \big(\,
 \end{tikzpicture}
 \end{center}
 
-\paragraph{Por qué este árbol es mejor.} Las dos selecciones se evalúan
-sobre tablas base (no sobre productos intermedios), y reducen la
-cardinalidad antes del primer join. El primer $\jn$ une los resultados
-filtrados (típicamente mucho más pequeños), por lo que la tabla intermedia
-de cara al segundo join es chica.
-
+% --- b) ---
 \subsection{b) $\sel{precio>25}(cliente \jn compran \jn articulos)$}
 
-\subsubsection*{Expresión base $E_0$}
+\textit{Expresión base $E_0$:}
 
 \[
 E_0 \;=\; \sel{precio>25}\!\big((cliente \jn compran) \jn articulos\big)
 \]
 
-\paragraph{Árbol de $E_0$.}
+\textit{Árbol de $E_0$:}
 
 \begin{center}
 \begin{tikzpicture}[level distance=12mm, sibling distance=22mm,
@@ -499,36 +434,27 @@ E_0 \;=\; \sel{precio>25}\!\big((cliente \jn compran) \jn articulos\big)
 \end{tikzpicture}
 \end{center}
 
-\subsubsection*{Equivalente $E_1$ --- push-down a \texttt{articulos} (R7a)}
-
-\texttt{precio} sólo aparece en \texttt{articulos}, por lo que se empuja la
-selección a esa hoja:
+\textit{Equivalente $E_1$ --- push-down a \texttt{articulos} (R7a):} \texttt{precio} sólo aparece en \texttt{articulos}.
 
 \[
 E_1 \;=\; (cliente \jn compran) \jn \sel{precio>25}(articulos)
 \]
 
-\subsubsection*{Equivalente $E_2$ --- asociatividad (R6a)}
+\textit{Equivalente $E_2$ --- asociatividad (R6a):}
 
 \[
 E_2 \;=\; cliente \jn \big(compran \jn \sel{precio>25}(articulos)\big)
 \]
 
-Conviene calcular primero $compran \jn \sel{precio>25}(articulos)$ porque
-$\sigma$ ya redujo \texttt{articulos}; el resultado de ese join se cruza
-después con \texttt{cliente}.
-
-\subsubsection*{Equivalente $E_3$ --- conmutatividad y reasociación (R5, R6a)}
+\textit{Equivalente $E_3$ --- conmutatividad y reasociación (R5, R6a):}
 
 \[
 E_3 \;=\; \big(\sel{precio>25}(articulos) \jn compran\big) \jn cliente
 \]
 
-Equivalente operacionalmente a $E_2$ pero útil si el algoritmo de join se
-implementa de manera asimétrica (por ejemplo, \emph{hash join} con la
-relación más chica como \emph{build}).
+Equivalente operacionalmente a $E_2$ pero útil si el algoritmo de join es asimétrico (ej. \emph{hash join} con la relación más chica como \emph{build}).
 
-\paragraph{Árbol final ($E_3$).}
+\textit{Árbol final ($E_3$):}
 
 \begin{center}
 \begin{tikzpicture}[level distance=12mm, sibling distance=30mm,
@@ -542,84 +468,89 @@ relación más chica como \emph{build}).
 \end{tikzpicture}
 \end{center}
 
-\begin{nota}
-Si se quisiera \emph{también} proyectar tan pronto como sea posible, podría
-aplicarse R8 (proyección distribuye sobre join) para retener únicamente
-\texttt{Nart} en la rama de \texttt{articulos} filtrada y \texttt{Ncli} en
-\texttt{cliente}, achicando aún más las tuplas intermedias.
-\end{nota}
+\bloquePorque
+
+\begin{itemize}
+    \item \textbf{Cascada (R1)} no mejora por sí sola: solo descompone la selección conjuntiva en dos selecciones independientes, que recién después se pueden mover por separado.
+    \item \textbf{Push-down (R7a/R7b)} es la transformación que más reduce costo: las selecciones se evalúan sobre tablas base y la cardinalidad cae \emph{antes} de los joins, así los joins trabajan sobre relaciones más chicas.
+    \item \textbf{Reasociación (R6a)} elige el orden de joins que minimiza el tamaño del resultado intermedio. Hacer primero el join entre las dos relaciones ya filtradas suele dar el intermedio más pequeño.
+    \item Si no se aplicaran estas reglas, el motor primero haría los joins completos (potencialmente con millones de tuplas intermedias) y filtraría al final, multiplicando el costo de I/O.
+\end{itemize}
+
+\bloqueMySQL
+
+El optimizador de MySQL 8+ aplica internamente estas mismas transformaciones (predicado push-down, join reordering). Para \emph{ver} qué decisiones tomó, hay dos herramientas:
+
+\begin{lstlisting}
+-- 1) EXPLAIN FORMAT=JSON da el plan estructurado con costos y filas estimadas.
+EXPLAIN FORMAT=JSON
+SELECT *
+FROM proveedor pv
+JOIN provee     pr ON pv.Nprov = pr.Nprov
+JOIN articulos  a  ON pr.Nart  = a.Nart
+WHERE a.desc = 'Pan Rallado' AND pr.precio_venta < 15;
+
+-- 2) optimizer_trace muestra cada transformacion considerada
+SET optimizer_trace = "enabled=on";
+SELECT /* la query del Ejercicio 2.a */ ...;
+SELECT TRACE
+FROM information_schema.OPTIMIZER_TRACE;
+SET optimizer_trace = "enabled=off";
+\end{lstlisting}
+
+En la \texttt{TRACE} aparecen pasos como \texttt{condition\_processing} (donde se ve el push-down del \texttt{WHERE} sobre cada tabla), \texttt{rows\_estimation} (cardinalidades estimadas) y \texttt{considered\_execution\_plans} (cada orden de join evaluado con su costo).
+
+\textit{Diferencias relevantes con PostgreSQL/Oracle:}
+
+\begin{itemize}
+    \item MySQL usa principalmente \emph{block nested loop} históricamente; \emph{hash join} fue introducido en 8.0.18 (octubre 2019) y, desde 8.0.20, se aplica también a equi-joins con índices. \emph{Sort-merge} no existe como algoritmo separado.
+    \item Para forzar el orden de join en MySQL: \texttt{STRAIGHT\_JOIN} (a nivel sentencia o entre tablas) bloquea el reordenamiento que haría el optimizador.
+\end{itemize}
 
 % =====================================================
 \section{Ejercicio 3: Estimación de tamaño y orden de join}
 % =====================================================
 
-\paragraph{Enunciado.} Relaciones
-$R_1(A,B,C)$, $R_2(C,D,E)$, $R_3(E,F)$ con claves $A$, $C$ y $E$
-respectivamente, $|R_1|=250$, $|R_2|=3000$, $|R_3|=5000$. Estimar
-$|R_1 \jn R_2 \jn R_3|$ y dar el orden de ejecución más eficiente.
+\bloqueConsigna
 
-\subsection{Marco teórico aplicado (Teórico 7)}
+Dadas las relaciones $R_1(A,B,C)$, $R_2(C,D,E)$, $R_3(E,F)$ con claves $A$, $C$ y $E$ respectivamente. Suponer que $r_1$ tiene 250 tuplas, $r_2$ 3000 tuplas y $r_3$ 5000 tuplas. Estimar el tamaño de $r_1 \jn r_2 \jn r_3$ y dar el orden de ejecución más eficiente para calcular el join.
 
-Cuando dos relaciones se unen por un atributo $A$ que es \emph{clave} en una
-de ellas, cada tupla de la otra se cruza con \textbf{a lo sumo una} tupla:
+\bloqueIdea
 
-\[
-\text{Si } R \cap S = \{A\} \text{ y } A \text{ es clave de } S,
-\text{ entonces } |R \jn S| \le |R|.
-\]
+Cuando dos relaciones se unen por un atributo que es \emph{clave} en una de ellas, cada tupla de la otra cruza con a lo sumo una; la cardinalidad del join queda acotada por la relación no-clave. Eso da una regla directa para acotar tamaños intermedios y, por lo tanto, elegir el orden de ejecución del join multirrelación.
 
-Si en cambio $A$ no es clave en ninguna de las dos, la estimación clásica es
+\bloqueSolucion
 
-\[
-|R \jn S| \;\approx\; \frac{n_r\, n_s}{\max\{V(A,r),\,V(A,s)\}}.
-\]
+\textit{Marco teórico (Teórico 7):}
 
-La heurística para elegir el orden de un join multirrelación es:
-\emph{primero los joins que reduzcan más el resultado intermedio}, dejando
-para el final las relaciones que aporten más tuplas al cómputo.
+Si $R \cap S = \{A\}$ y $A$ es clave de $S$, entonces $|R \jn S| \le |R|$. Si $A$ no es clave en ninguna, la estimación clásica es $|R \jn S| \approx n_r\, n_s / \max\{V(A,r),\,V(A,s)\}$. La heurística para ordenar joins es: primero los joins que reduzcan más el resultado intermedio.
 
-\subsection{Estimación de cardinalidad}
-
-\paragraph{Paso 1: $R_1 \jn R_2$ (atributo común $C$).}
-$C$ es clave en $R_2$, así que cada tupla de $R_1$ matchea con a lo sumo una
-de $R_2$:
+\textit{Paso 1: $R_1 \jn R_2$ (atributo común $C$):} $C$ es clave en $R_2$, así que cada tupla de $R_1$ matchea con a lo sumo una de $R_2$:
 \[
 |R_1 \jn R_2| \;\le\; |R_1| \;=\; 250.
 \]
-Asumiendo integridad referencial usual (cada $R_1.C$ está presente en
-$R_2.C$), se cumple la igualdad:
-$|R_1 \jn R_2| = 250$.
+Asumiendo integridad referencial usual (cada $R_1.C$ está presente en $R_2.C$), se cumple la igualdad: $|R_1 \jn R_2| = 250$.
 
-\paragraph{Paso 2: $(R_1 \jn R_2) \jn R_3$ (atributo común $E$).}
-$E$ es clave en $R_3$, por lo tanto cada tupla intermedia matchea con a lo
-sumo una de $R_3$:
+\textit{Paso 2: $(R_1 \jn R_2) \jn R_3$ (atributo común $E$):} $E$ es clave en $R_3$, por lo tanto cada tupla intermedia matchea con a lo sumo una de $R_3$:
 \[
 |R_1 \jn R_2 \jn R_3| \;\le\; |R_1 \jn R_2| \;=\; 250.
 \]
 
-\paragraph{Resultado.} La cardinalidad estimada es
-$\boxed{|R_1 \jn R_2 \jn R_3| = 250}$ tuplas.
+\textit{Resultado:} la cardinalidad estimada es $\boxed{|R_1 \jn R_2 \jn R_3| = 250}$ tuplas.
 
-\subsection{Orden de ejecución más eficiente}
+\textit{Orden de ejecución --- dos planes razonables:}
 
-Hay dos planes razonables (ambos son válidos por asociatividad y
-conmutatividad del join natural):
-
-\paragraph{Plan A: $(R_1 \jn R_2) \jn R_3$.}
+\textit{Plan A: $(R_1 \jn R_2) \jn R_3$.}
 \begin{itemize}
     \item Intermedio: $|R_1 \jn R_2| = 250$ tuplas.
     \item Join final: 250 tuplas contra $R_3$ (5000 tuplas) por $E$ (clave en $R_3$).
 \end{itemize}
 
-\paragraph{Plan B: $R_1 \jn (R_2 \jn R_3)$.}
+\textit{Plan B: $R_1 \jn (R_2 \jn R_3)$.}
 \begin{itemize}
-    \item Intermedio: $|R_2 \jn R_3|$. Como $E$ es clave en $R_3$,
-    $|R_2 \jn R_3| \le |R_2| = 3000$. Bajo integridad referencial,
-    $|R_2 \jn R_3| = 3000$.
+    \item Intermedio: $|R_2 \jn R_3|$. Como $E$ es clave en $R_3$, $|R_2 \jn R_3| \le |R_2| = 3000$. Bajo integridad referencial, $|R_2 \jn R_3| = 3000$.
     \item Join final: 3000 tuplas contra $R_1$ (250 tuplas) por $C$ (clave en $R_1$).
 \end{itemize}
-
-\subsubsection*{Comparación}
 
 \begin{center}
 \begin{tabular}{lcc}
@@ -632,48 +563,84 @@ B: $R_1\jn(R_2\jn R_3)$  & 3000 & 250 \\
 \end{tabular}
 \end{center}
 
-El \textbf{Plan A} se queda con un resultado intermedio 12 veces más chico.
-Ese resultado se almacena (o se mantiene en pipeline) y se compara contra
-$R_3$ en el último join. Cualquier algoritmo concreto (\emph{nested loop},
-\emph{hash join}, \emph{merge join}) trabaja mejor con la relación externa
-más pequeña; el Plan A se la garantiza.
+\textit{Orden recomendado:} $\big((R_1 \jn R_2)\jn R_3\big)$ con tamaño estimado 250.
 
-\paragraph{Conclusión.}
-\[
-\text{Orden recomendado: } \big((R_1 \jn R_2)\jn R_3\big) \text{ con tamaño estimado } 250.
-\]
+\bloquePorque
+
+\begin{itemize}
+    \item El Plan A da un intermedio 12 veces más chico que el Plan B. Ese resultado se mantiene en pipeline o se materializa, y se compara contra $R_3$ en el último join.
+    \item Cualquier algoritmo concreto (\emph{nested loop}, \emph{hash join}, \emph{merge join}) trabaja mejor con la relación externa más pequeña; el Plan A se la garantiza.
+    \item Si las claves no estuvieran indicadas, la estimación bajaría a la fórmula con $V(A, r)$ y el optimizador necesitaría las estadísticas del catálogo para elegir bien.
+\end{itemize}
+
+\bloqueMySQL
+
+MySQL 8+ aplica internamente la misma heurística de reordenamiento (\emph{table pull-out}, \emph{nested-loop search}). Para \emph{verificar} el orden elegido:
+
+\begin{lstlisting}
+EXPLAIN FORMAT=JSON
+SELECT *
+FROM R1 JOIN R2 ON R1.C = R2.C
+       JOIN R3 ON R2.E = R3.E;
+-- En el JSON aparece "nested_loop" o "hash_join" con el orden:
+--   primer table:  R1   (filas estimadas: 250)
+--   segunda:       R2   (filas filtradas tras el join)
+--   tercera:       R3
+\end{lstlisting}
+
+Para \emph{forzar} un orden distinto y comparar costos:
+
+\begin{lstlisting}
+-- STRAIGHT_JOIN bloquea el reordenamiento del optimizador:
+SELECT STRAIGHT_JOIN *
+FROM R2 JOIN R3 ON R2.E = R3.E       -- fuerza Plan B
+       JOIN R1 ON R1.C = R2.C;
+
+-- Alternativa con hint (MySQL 8+):
+SELECT /*+ JOIN_ORDER(R1, R2, R3) */ *
+FROM R1, R2, R3
+WHERE R1.C = R2.C AND R2.E = R3.E;
+\end{lstlisting}
+
+\textit{Diferencia clave con PostgreSQL/Oracle:} en MySQL, la estimación de cardinalidad depende fuertemente del estadístico \texttt{rows} de \texttt{INFORMATION\_SCHEMA.TABLES} y de los índices; si \texttt{ANALYZE TABLE} no se ejecutó hace tiempo, el optimizador puede elegir el Plan B por estadísticas obsoletas. PostgreSQL/Oracle tienen autoanalyze con umbrales más sofisticados; en MySQL conviene ejecutar \texttt{ANALYZE TABLE} explícito ante cargas grandes.
 
 % =====================================================
 \section{Ejercicio 4: Catálogo de PostgreSQL}
 % =====================================================
 
-\subsection{a) Metadata de tablas, atributos y tipos}
+\bloqueConsigna
 
-PostgreSQL ofrece dos caminos para inspeccionar metadata:
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item Investigue el catálogo de una base de datos postgres. ¿En qué Tabla/s y/o Vista/s postgres almacena información sobre las tablas, atributos y sus tipos? Haga una consulta al catálogo de la base de datos del ejercicio 1 b) de la práctica 1 y obtenga nombre y tipo de los atributos de la tabla ``vehículo''.
+    \item Continúe con la investigación del catálogo de una base de datos postgres. ¿En qué Tabla/s y/o Vista/s postgres almacena información estadística de las tablas? ¿Qué tipo de estadística almacena para los atributos de las tablas?
+\end{enumerate}
 
-\paragraph{Estándar \texttt{information\_schema}.}
+\bloqueIdea
+
+PostgreSQL expone su metadata por dos caminos: las vistas estándar \texttt{information\_schema.*} (portables, conformes al SQL estándar) y las tablas del catálogo interno \texttt{pg\_catalog.*} (específicas de PostgreSQL, más completas). Las estadísticas que usa el planner viven principalmente en \texttt{pg\_class} (a nivel tabla) y \texttt{pg\_statistic}/\texttt{pg\_stats} (a nivel columna).
+
+\bloqueSolucion
+
+\textit{a) Metadata de tablas, atributos y tipos.}
+
+\textit{Estándar \texttt{information\_schema}:}
 \begin{itemize}
     \item \texttt{information\_schema.tables}: tablas y vistas accesibles.
-    \item \texttt{information\_schema.columns}: una fila por columna, con
-    \texttt{column\_name}, \texttt{data\_type}, \texttt{udt\_name},
-    longitud/precisión, nullability, default, posición, etc.
+    \item \texttt{information\_schema.columns}: una fila por columna, con \texttt{column\_name}, \texttt{data\_type}, \texttt{udt\_name}, longitud/precisión, nullability, default, posición.
 \end{itemize}
 
-\paragraph{Catálogo interno (\texttt{pg\_catalog}).}
+\textit{Catálogo interno \texttt{pg\_catalog}:}
 \begin{itemize}
-    \item \texttt{pg\_class}: objetos relacionales (tablas, índices,
-    secuencias, vistas).
+    \item \texttt{pg\_class}: objetos relacionales (tablas, índices, secuencias, vistas).
     \item \texttt{pg\_namespace}: esquemas.
-    \item \texttt{pg\_attribute}: columnas de cada relación
-    (\texttt{attname}, \texttt{atttypid}, \texttt{attnum}\ldots).
+    \item \texttt{pg\_attribute}: columnas de cada relación.
     \item \texttt{pg\_type}: catálogo de tipos.
 \end{itemize}
 
-\subsubsection*{Consulta pedida: nombre y tipo de los atributos de \texttt{vehiculo}}
-
-Versión simple, sobre el estándar:
+\textit{Consulta pedida (nombre y tipo de los atributos de \texttt{vehiculo}):}
 
 \begin{lstlisting}
+-- Version estandar
 SELECT c.column_name AS atributo,
        c.data_type   AS tipo,
        c.udt_name    AS tipo_interno
@@ -681,11 +648,8 @@ FROM information_schema.columns c
 WHERE c.table_schema = 'public'
   AND c.table_name   = 'vehiculo'
 ORDER BY c.ordinal_position;
-\end{lstlisting}
 
-Versión \texttt{pg\_catalog} (equivalente, más cercana al catálogo real):
-
-\begin{lstlisting}
+-- Version pg_catalog (mas cercana al catalogo real)
 SELECT a.attname                              AS atributo,
        format_type(a.atttypid, a.atttypmod)   AS tipo
 FROM pg_catalog.pg_attribute a
@@ -698,52 +662,36 @@ WHERE n.nspname = 'public'
 ORDER BY a.attnum;
 \end{lstlisting}
 
-\subsection{b) Estadísticas que usa el planner}
+\textit{b) Estadísticas que usa el planner.}
 
-\subsubsection*{Estadísticas de tabla}
-
-Las estimaciones del planner por tabla viven en \texttt{pg\_class}:
-
+\textit{A nivel tabla --- \texttt{pg\_class}:}
 \begin{itemize}
-    \item \texttt{reltuples}: estimación de la cantidad de filas
-    (actualizada por \texttt{ANALYZE} y \texttt{VACUUM}).
+    \item \texttt{reltuples}: estimación de la cantidad de filas (actualizada por \texttt{ANALYZE}/\texttt{VACUUM}).
     \item \texttt{relpages}: cantidad estimada de páginas (bloques).
 \end{itemize}
 
-Las estadísticas de actividad (cuántos scans secuenciales hubo, cuántos
-inserts, último \texttt{ANALYZE}, etc.) están en
-\texttt{pg\_stat\_user\_tables}.
+Las estadísticas de \emph{actividad} (scans, inserts, último \texttt{ANALYZE}) están en \texttt{pg\_stat\_user\_tables}.
 
 \begin{lstlisting}
-SELECT n.nspname        AS esquema,
-       c.relname        AS tabla,
-       c.reltuples      AS filas_estimadas,
-       c.relpages       AS paginas
+SELECT n.nspname AS esquema,
+       c.relname AS tabla,
+       c.reltuples::bigint AS filas_estimadas,
+       c.relpages          AS paginas
 FROM pg_catalog.pg_class     c
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind = 'r'
   AND c.relname = 'vehiculo';
 \end{lstlisting}
 
-\subsubsection*{Estadísticas por columna}
-
-La fuente real es la tabla interna \texttt{pg\_statistic}; para consulta
-humana se usa la vista \texttt{pg\_stats}, que decodifica los datos.
-\texttt{pg\_stats} mantiene, por cada columna analizada:
+\textit{A nivel columna --- \texttt{pg\_stats}} (vista sobre \texttt{pg\_statistic}, decodificada):
 
 \begin{itemize}
     \item \texttt{null\_frac}: fracción de valores \texttt{NULL}.
-    \item \texttt{n\_distinct}: cantidad de valores distintos
-    (positivo, o negativo si se expresa como fracción de la tabla).
-    \item \texttt{avg\_width}: ancho promedio del valor en bytes.
-    \item \texttt{most\_common\_vals} / \texttt{most\_common\_freqs}:
-    valores más frecuentes y su frecuencia. Permite estimar selectividad
-    para igualdades sobre valores \emph{populares}.
-    \item \texttt{histogram\_bounds}: límites de un histograma equi-depth
-    para estimar selectividad de \emph{rangos}.
-    \item \texttt{correlation}: correlación entre el orden lógico del
-    atributo y el orden físico en disco. Cercano a 1 implica que el atributo
-    es buen candidato para acceso por índice.
+    \item \texttt{n\_distinct}: cantidad de valores distintos (positivo, o negativo si se expresa como fracción).
+    \item \texttt{avg\_width}: ancho promedio en bytes.
+    \item \texttt{most\_common\_vals} / \texttt{most\_common\_freqs}: MCV (Most Common Values) y sus frecuencias. Permiten estimar selectividad para igualdades sobre valores populares.
+    \item \texttt{histogram\_bounds}: histograma equi-depth para selectividad de \emph{rangos}.
+    \item \texttt{correlation}: correlación entre el orden lógico del atributo y el orden físico en disco. Cercano a 1 favorece Index Scan.
 \end{itemize}
 
 \begin{lstlisting}
@@ -762,49 +710,113 @@ ORDER BY s.attname;
 \end{lstlisting}
 
 \begin{nota}
-Si la consulta a \texttt{pg\_stats} no devuelve nada o devuelve datos
-desactualizados, hay que ejecutar \texttt{ANALYZE public.vehiculo;}. El
-recolector de estadísticas no actualiza estos números con cada modificación,
-sino que se dispara durante \texttt{VACUUM ANALYZE} o cuando \texttt{autovacuum}
-considera que se acumularon suficientes cambios.
+Si \texttt{pg\_stats} devuelve datos desactualizados o vacíos, hay que ejecutar \texttt{ANALYZE public.vehiculo;}. El recolector se dispara en \texttt{VACUUM ANALYZE} o cuando \texttt{autovacuum} considera que se acumularon suficientes cambios.
 \end{nota}
 
-\subsubsection*{Conexión con el Teórico 7}
-
-Estos datos son los $n_r$, $V(A,r)$, histogramas y MCVs que el Teórico~7
-nombra al hablar de estimación de cardinalidades. El planner los usa para:
+\bloquePorque
 
 \begin{itemize}
-    \item estimar el tamaño de cada selección
-    ($\sel{A=v}(r)\approx n_r/V(A,r)$),
-    \item estimar el tamaño de joins ($n_r n_s / \max(V(A,r), V(A,s))$),
-    \item decidir entre Seq Scan / Index Scan / Bitmap Heap Scan,
-    \item elegir el algoritmo de join (\emph{nested loop}, \emph{hash}, \emph{merge}).
+    \item \texttt{information\_schema} es la fachada portable, pero \texttt{pg\_catalog} expone columnas que no están en el estándar (como \texttt{oid}, \texttt{relkind}, \texttt{atttypid}).
+    \item Los datos de \texttt{pg\_stats} son los $n_r$, $V(A,r)$, MCVs e histogramas del Teórico 7. El planner los usa para estimar el tamaño de cada selección ($\sel{A=v}(r)\approx n_r/V(A,r)$), de los joins ($n_r n_s / \max(V(A,r), V(A,s))$) y para decidir entre Seq Scan / Index Scan / Bitmap Heap Scan.
+    \item \texttt{correlation} influye en el costo estimado de un Index Scan: con correlación alta, el motor sabe que las lecturas serán mayormente secuenciales (más baratas).
+\end{itemize}
+
+\bloqueMySQL
+
+MySQL 8+ expone metadata estadística por tres caminos:
+
+\textit{1) \texttt{INFORMATION\_SCHEMA} (estándar, portable):}
+
+\begin{lstlisting}
+-- Equivalente a pg_class.reltuples / pg_class.relpages
+SELECT TABLE_NAME, ENGINE, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH, INDEX_LENGTH
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = 'practico1b_mysql'
+  AND TABLE_NAME   = 'vehiculo';
+
+-- Equivalente a pg_attribute / pg_type
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = 'practico1b_mysql'
+  AND TABLE_NAME   = 'vehiculo'
+ORDER BY ORDINAL_POSITION;
+
+-- Cardinalidad estimada por indice (similar a n_distinct de pg_stats)
+SELECT INDEX_NAME, COLUMN_NAME, CARDINALITY, SEQ_IN_INDEX
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = 'practico1b_mysql'
+  AND TABLE_NAME   = 'vehiculo'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+\end{lstlisting}
+
+\textit{2) Tablas internas de InnoDB para estadísticas persistentes:}
+
+\begin{lstlisting}
+-- Stats por tabla (filas, paginas, paginas de indice)
+SELECT * FROM mysql.innodb_table_stats
+WHERE database_name = 'practico1b_mysql'
+  AND table_name    = 'vehiculo';
+
+-- Stats por columna de cada indice (n_diff_pfx??, leaf pages, ...)
+SELECT * FROM mysql.innodb_index_stats
+WHERE database_name = 'practico1b_mysql'
+  AND table_name    = 'vehiculo';
+\end{lstlisting}
+
+\textit{3) Histogramas (MySQL 8.0+):} a diferencia de PostgreSQL que arma histogramas en \texttt{ANALYZE}, MySQL exige crearlos a mano:
+
+\begin{lstlisting}
+ANALYZE TABLE vehiculo
+UPDATE HISTOGRAM ON saldoActual, modelo WITH 100 BUCKETS;
+
+-- Inspeccion
+SELECT * FROM information_schema.COLUMN_STATISTICS
+WHERE SCHEMA_NAME = 'practico1b_mysql'
+  AND TABLE_NAME  = 'vehiculo';
+\end{lstlisting}
+
+\textit{Diferencias con PostgreSQL:}
+
+\begin{itemize}
+    \item PostgreSQL guarda MCVs e histogramas por defecto en \texttt{pg\_stats} para cada columna (lo arma \texttt{ANALYZE}). MySQL no construye histogramas por defecto: hay que pedirlos con \texttt{ANALYZE TABLE ... UPDATE HISTOGRAM}. Sin histograma, MySQL solo tiene cardinalidades por índice.
+    \item En PostgreSQL la columna \texttt{correlation} relaciona orden lógico/físico; MySQL/InnoDB no expone esa métrica directamente.
 \end{itemize}
 
 % =====================================================
 \section{Ejercicio 5: Ejecución y planes en PostgreSQL}
 % =====================================================
 
-\paragraph{Enunciado.} Sobre el esquema
+\bloqueConsigna
+
+Dado el siguiente esquema de una base de datos:
+
 \begin{itemize}
-    \item \texttt{persona(persona\_id, \ldots)} --- script provisto por cátedra.
-    \item \texttt{recurso(\underline{recurso\_id}, descripcion, \ldots)}.
-    \item \texttt{seguimiento\_acceso(\underline{seguimiento\_acceso\_id},
-    fecha\_yhora\_entrada, fecha\_yhora\_salida, host, persona\_id, recurso\_id)}.
+    \item \texttt{persona(\underline{persona\_id}, activar\_mail\_personal, ..., path\_foto, caracteristica\_celular)}
+    \item \texttt{recurso(\underline{recurso\_id}, descripcion, id, nombre, orden)}
+    \item \texttt{seguimiento\_acceso(\underline{seguimiento\_acceso\_id}, fecha\_yhora\_entrada, fecha\_yhora\_salida, host, persona\_id, recurso\_id)}
 \end{itemize}
 
-los cinco incisos piden: crear y poblar las tablas, generar accesos como
-producto cartesiano entre \texttt{persona} y \texttt{recurso}, observar el
-catálogo, y analizar los planes de dos consultas (filtrado por fecha y join
-natural), modificándolas para alterar la decisión del optimizador.
+Realice lo siguiente:
 
-\subsection{a) Creación de tablas y carga inicial}
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item Cree las tablas en una base de datos postgres (el script de creación se puede descargar de la plataforma Evelia) y cargue datos en la tabla persona y recursos.
+    \item Cree un programa que, por cada persona inserte al menos 1 registro en la tabla seguimiento\_acceso por cada recurso (producto cartesiano entre persona y recurso más fecha y hora de acceso).
+    \item Observe y analice en el catálogo la información estadística de las tablas creadas en este ejercicio.
+    \item Luego de ejecutar la siguiente consulta:
+\begin{lstlisting}
+SELECT * FROM seguimiento_acceso WHERE "FECHA_YHORA_ENTRADA" = '2023-05-06'
+\end{lstlisting}
+    (a) observe el plan que usó postgres con \texttt{EXPLAIN}; (b) qué podría hacer para mejorar la performance y cambiar el plan.
+    \item Luego de ejecutar \texttt{SELECT * FROM seguimiento\_acceso NATURAL JOIN persona}: (a) analice su plan de ejecución; (b) modifique la consulta para que el motor utilice Merge Join en lugar de Hash Join.
+\end{enumerate}
 
-Los tres scripts provistos (\texttt{PERSONAPostgres.sql},
-\texttt{RecursoPostgres.sql} y \texttt{Seguimiento\_AceesoPostgres.sql}) se
-ejecutan en este orden. El tercero crea \texttt{seguimiento\_acceso} con
-\texttt{FK} hacia \texttt{persona} y \texttt{recurso}, por eso va al final.
+\bloqueIdea
+
+Los cinco incisos forman un único hilo: cargar datos, mirar las estadísticas que el planner usa, observar planes con \texttt{EXPLAIN ANALYZE}, e influir sobre la elección del plan creando índices, ejecutando \texttt{ANALYZE} o usando \texttt{enable\_hashjoin}. Es un \emph{ejercicio de campo} sobre los conceptos de los Teóricos 6 y 7.
+
+\bloqueSolucion
+
+\textit{a) Creación de tablas y carga inicial.}
 
 \begin{lstlisting}
 \i practico-05/ejercicio-05/sql/PERSONAPostgres.sql
@@ -818,11 +830,7 @@ UNION ALL
 SELECT 'seguimiento_acceso',            count(*) FROM seguimiento_acceso;
 \end{lstlisting}
 
-\subsection{b) Programa que inserta una fila por par persona--recurso}
-
-La consigna pide ``1 registro en \texttt{seguimiento\_acceso} por cada
-persona y cada recurso''. La forma más directa en SQL puro es un
-\texttt{INSERT \dots SELECT} con \texttt{CROSS JOIN}:
+\textit{b) Programa: una fila por par persona-recurso.}
 
 \begin{lstlisting}
 WITH pares AS (
@@ -855,115 +863,53 @@ SELECT TIMESTAMP '2023-05-01 00:00:00'
 FROM faltantes;
 \end{lstlisting}
 
-\paragraph{Lectura del script.}
-\begin{itemize}
-    \item \texttt{CROSS JOIN} construye el producto cartesiano
-    $|\texttt{persona}|\times|\texttt{recurso}|$.
-    \item \texttt{row\_number()} genera un \texttt{rn} determinista que se
-    usa como semilla para distribuir las fechas (un día por cada 30 pares)
-    y los hosts.
-    \item El \texttt{NOT EXISTS} hace la operación \emph{idempotente}:
-    re-ejecutar el script no duplica pares ya cargados.
-\end{itemize}
-
-Verificación: tras correr el script, \texttt{count(*)} de
-\texttt{seguimiento\_acceso} debería igualar
-$|\texttt{persona}| \cdot |\texttt{recurso}|$.
-
-\subsection{c) Información estadística del catálogo}
-
-Antes de mirar el catálogo conviene refrescar:
+\textit{c) Estadísticas del catálogo.}
 
 \begin{lstlisting}
 ANALYZE persona;
 ANALYZE recurso;
 ANALYZE seguimiento_acceso;
-\end{lstlisting}
 
-\subsubsection*{Por tabla --- estimaciones del planner}
-
-\begin{lstlisting}
-SELECT n.nspname AS esquema,
-       c.relname AS tabla,
-       c.reltuples::bigint AS filas_estimadas,
-       c.relpages          AS paginas
+-- Estimaciones del planner por tabla
+SELECT n.nspname AS esquema, c.relname AS tabla,
+       c.reltuples::bigint AS filas_estimadas, c.relpages AS paginas
 FROM pg_catalog.pg_class c
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind = 'r'
   AND c.relname IN ('persona','recurso','seguimiento_acceso');
-\end{lstlisting}
 
-Esto se corresponde directamente con $n_r$ y $b_r$ del Teórico~6.
-
-\subsubsection*{Por tabla --- actividad}
-
-\begin{lstlisting}
-SELECT schemaname, relname,
-       seq_scan, idx_scan,
-       n_tup_ins, n_tup_upd, n_tup_del,
-       n_live_tup, n_dead_tup,
-       last_analyze
+-- Actividad
+SELECT schemaname, relname, seq_scan, idx_scan,
+       n_tup_ins, n_live_tup, last_analyze
 FROM pg_stat_user_tables
 WHERE relname IN ('persona','recurso','seguimiento_acceso');
-\end{lstlisting}
 
-Si \texttt{idx\_scan = 0} para \texttt{seguimiento\_acceso} significa que las
-consultas hechas hasta ahora no encontraron un índice útil (se resolvieron
-todas con \emph{Seq Scan}).
-
-\subsubsection*{Por columna --- \texttt{pg\_stats}}
-
-\begin{lstlisting}
-SELECT schemaname, tablename, attname,
-       null_frac, n_distinct, avg_width,
-       correlation,
-       most_common_vals, most_common_freqs,
-       histogram_bounds
+-- Por columna
+SELECT schemaname, tablename, attname, null_frac, n_distinct, avg_width,
+       correlation, most_common_vals, histogram_bounds
 FROM pg_stats
 WHERE tablename IN ('persona','recurso','seguimiento_acceso')
 ORDER BY tablename, attname;
 \end{lstlisting}
 
-\emph{Qué mirar concretamente:}
-\begin{itemize}
-    \item \texttt{n\_distinct} en \texttt{persona\_id} dentro de
-    \texttt{seguimiento\_acceso}: debería ser cercano al número de personas.
-    \item \texttt{histogram\_bounds} de \texttt{fecha\_yhora\_entrada}:
-    refleja el rango temporal generado por el script de carga.
-    \item \texttt{correlation} cerca de 1 indica que el orden físico
-    coincide con el orden lógico, y favorece \emph{Index Scan}.
-\end{itemize}
+\textit{d) Filtrado por fecha: plan inicial y mejora.}
 
-\subsection{d) Filtrado por fecha: plan inicial y mejora}
+\textit{d.a) Plan inicial (sin índice):}
 
-\paragraph{Consulta del enunciado.}
 \begin{lstlisting}
-SELECT * FROM seguimiento_acceso
-WHERE fecha_yhora_entrada = TIMESTAMP '2023-05-06 00:00:00';
-\end{lstlisting}
-
-\subsubsection*{d.a) Plan inicial}
-
-\begin{lstlisting}[language=SQLext]
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT * FROM seguimiento_acceso
 WHERE fecha_yhora_entrada = TIMESTAMP '2023-05-06 00:00:00';
 \end{lstlisting}
-
-Sin índice sobre \texttt{fecha\_yhora\_entrada} el plan habitual es:
 
 \begin{lstlisting}[style=shellstyle]
 Seq Scan on seguimiento_acceso  (cost=...)
   Filter: (fecha_yhora_entrada = '2023-05-06 00:00:00'::timestamp)
 \end{lstlisting}
 
-Es decir, A1 del Teórico~6: recorre todos los bloques y descarta los que no
-cumplen el predicado.
+A1 del Teórico 6: recorre todos los bloques y descarta los que no cumplen.
 
-\subsubsection*{d.b) Mejora}
-
-Para forzar un plan distinto se crea un índice B+tree sobre el atributo
-filtrado y se actualizan las estadísticas:
+\textit{d.b) Mejora: crear índice + ANALYZE.}
 
 \begin{lstlisting}
 CREATE INDEX IF NOT EXISTS idx_seguimiento_acceso_fecha_entrada
@@ -976,36 +922,22 @@ SELECT * FROM seguimiento_acceso
 WHERE fecha_yhora_entrada = TIMESTAMP '2023-05-06 00:00:00';
 \end{lstlisting}
 
-Si la selectividad es muy alta (pocas filas con esa fecha exacta), el
-\emph{planner} cambia a \texttt{Index Scan} o \texttt{Bitmap Index Scan}, que
-corresponde al algoritmo A5/A7 del Teórico~6 (selección por índice
-secundario).
-
 \begin{lstlisting}[style=shellstyle]
 Bitmap Heap Scan on seguimiento_acceso ...
   Recheck Cond: (fecha_yhora_entrada = '2023-05-06 00:00:00'::timestamp)
   -> Bitmap Index Scan on idx_seguimiento_acceso_fecha_entrada
 \end{lstlisting}
 
-\paragraph{Observación.} En el script de carga se usaron fechas
-\emph{con hora distinta de 00:00:00}; por eso una igualdad estricta a
-\texttt{'2023-05-06 00:00:00'} puede devolver pocas o ninguna fila. Para
-``todo el día 2023-05-06'' la consulta correcta es un rango:
+Equivale a A5/A7 del Teórico 6.
+
+\textit{e) NATURAL JOIN: plan habitual y forzado de Merge Join.}
+
+\textit{e.a) Plan habitual --- Hash Join:}
 
 \begin{lstlisting}
-SELECT * FROM seguimiento_acceso
-WHERE fecha_yhora_entrada >= DATE '2023-05-06'
-  AND fecha_yhora_entrada <  DATE '2023-05-07';
-\end{lstlisting}
-
-\subsection{e) NATURAL JOIN: análisis y forzado de Merge Join}
-
-\paragraph{Consulta original.}
-\begin{lstlisting}
+EXPLAIN (ANALYZE, BUFFERS)
 SELECT * FROM seguimiento_acceso NATURAL JOIN persona;
 \end{lstlisting}
-
-\subsubsection*{e.a) Plan habitual --- Hash Join}
 
 \begin{lstlisting}[style=shellstyle]
 Hash Join  (cost=...)
@@ -1015,40 +947,22 @@ Hash Join  (cost=...)
        -> Seq Scan on persona
 \end{lstlisting}
 
-Lectura: PostgreSQL elige \emph{hash join} porque, sin un orden previo
-sobre \texttt{persona\_id} en ambas relaciones y sin un índice utilizable
-en línea, construir una tabla hash sobre la relación más chica
-(\texttt{persona}) y \emph{probar} contra la grande
-(\texttt{seguimiento\_acceso}) es lo más barato. Esto se corresponde con el
-algoritmo \emph{Hash-Join} descrito en el Teórico~6.
+\textit{e.b) Forzar Merge Join:} darle entradas ordenadas por la clave de join.
 
-\subsubsection*{e.b) Modificación para Merge Join}
-
-Para que el optimizador elija \emph{Merge Join} la idea es darle entradas
-ordenadas por la clave de join. Hay dos formas complementarias:
-
-\begin{enumerate}
-    \item Crear un índice ordenado sobre la columna del join en
-    \texttt{seguimiento\_acceso} (la otra ya tiene PK):
 \begin{lstlisting}
+-- 1) Indice ordenado sobre la columna de join (la otra ya tiene PK).
 CREATE INDEX IF NOT EXISTS idx_seguimiento_acceso_persona_id
     ON seguimiento_acceso (persona_id);
-ANALYZE persona;
 ANALYZE seguimiento_acceso;
-\end{lstlisting}
-    \item Reescribir la consulta con join explícito \emph{y} \texttt{ORDER BY}
-    por la clave de join:
-\begin{lstlisting}
+ANALYZE persona;
+
+-- 2) Reescribir la consulta con join explicito y ORDER BY por la clave.
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT sa.*, p.*
 FROM seguimiento_acceso sa
-JOIN persona p
-  ON sa.persona_id = p.persona_id
+JOIN persona p ON sa.persona_id = p.persona_id
 ORDER BY sa.persona_id;
 \end{lstlisting}
-\end{enumerate}
-
-Con esa información el planner suele elegir \emph{Merge Join}:
 
 \begin{lstlisting}[style=shellstyle]
 Merge Join
@@ -1057,10 +971,7 @@ Merge Join
   -> Index Scan using persona_pkey on persona p
 \end{lstlisting}
 
-\subsubsection*{Verificación académica forzando el algoritmo}
-
-Si el motor sigue eligiendo Hash Join (por tamaños y costos estimados), se
-puede deshabilitar para esa sesión:
+\textit{Verificación forzando el algoritmo:}
 
 \begin{lstlisting}
 SET enable_hashjoin = off;
@@ -1072,37 +983,99 @@ ORDER BY sa.persona_id;
 RESET enable_hashjoin;
 \end{lstlisting}
 
-\paragraph{Conclusión.} El optimizador no usa fórmulas absolutas: compara
-costos estimados sobre las estadísticas del catálogo. Cuando uno crea índices
-adecuados o pide ordenamientos por la clave de join, está cambiando los
-\emph{insumos} del cálculo, no las fórmulas. Eso es justamente lo que el
-Teórico~7 llama \emph{optimización basada en costos}: el planner explora un
-espacio de planes equivalentes y elige el de menor costo estimado dado el
-estado actual de las estadísticas.
+\bloquePorque
+
+\begin{itemize}
+    \item \textbf{Sin índice}: el planner sólo tiene Seq Scan; el costo $\approx b_r \cdot t_T$ no cambia con el predicado, así que cualquier filtro lo paga.
+    \item \textbf{Con índice + \texttt{ANALYZE}}: el planner conoce $n\_distinct$, MCVs e histograma de \texttt{fecha\_yhora\_entrada}; si la selectividad pedida es baja, estima Bitmap Index Scan más barato que Seq Scan y lo elige.
+    \item \textbf{Hash Join elegido por defecto en (e)}: \emph{hash join} es barato cuando una relación cabe en memoria (Persona) y la otra es grande (seguimiento\_acceso); el costo es lineal en ambas. Sin orden previo ni índice utilizable, no hay forma de hacer Merge Join sin un sort costoso.
+    \item \textbf{Merge Join con índice + \texttt{ORDER BY}}: si las dos entradas vienen ordenadas (Index Scan sobre persona\_id en ambas), el merge es lineal y evita la construcción del hash; cambia el cálculo de costo del planner.
+    \item \textbf{\texttt{SET enable\_hashjoin = off}}: fuerza al planner a descartar Hash Join. Útil pedagógicamente; en producción no se usa: si el planner elige Hash Join es porque, dadas las estadísticas, es lo más barato.
+\end{itemize}
+
+\bloqueMySQL
+
+MySQL 8+ tiene equivalentes para todas las operaciones de este ejercicio:
+
+\textit{Plan inicial / mejorado (inciso d):}
+
+\begin{lstlisting}
+-- Plan inicial (sin indice): EXPLAIN ANALYZE existe desde MySQL 8.0.18.
+EXPLAIN ANALYZE
+SELECT * FROM seguimiento_acceso
+WHERE fecha_yhora_entrada = '2023-05-06 00:00:00';
+-- type=ALL  -> equivale a Seq Scan.
+
+-- Mejora: indice + ANALYZE TABLE
+CREATE INDEX idx_seguimiento_acceso_fecha_entrada
+    ON seguimiento_acceso (fecha_yhora_entrada);
+ANALYZE TABLE seguimiento_acceso;
+
+EXPLAIN ANALYZE
+SELECT * FROM seguimiento_acceso
+WHERE fecha_yhora_entrada = '2023-05-06 00:00:00';
+-- type=ref / key=idx_seguimiento_acceso_fecha_entrada -> A5.
+\end{lstlisting}
+
+\textit{Forzar el uso de un índice:}
+
+\begin{lstlisting}
+SELECT * FROM seguimiento_acceso FORCE INDEX (idx_seguimiento_acceso_fecha_entrada)
+WHERE fecha_yhora_entrada = '2023-05-06 00:00:00';
+
+-- Sugerir (no obligar) un indice:
+SELECT * FROM seguimiento_acceso USE INDEX (idx_seguimiento_acceso_fecha_entrada)
+WHERE fecha_yhora_entrada = '2023-05-06 00:00:00';
+\end{lstlisting}
+
+\textit{Hash Join vs Nested Loop (inciso e):}
+
+\begin{lstlisting}
+-- Plan natural: en MySQL 8.0.18+ el optimizador puede elegir hash join
+-- para equi-joins sin indice utilizable; antes solo habia nested loop.
+EXPLAIN ANALYZE
+SELECT * FROM seguimiento_acceso NATURAL JOIN persona;
+-- "Inner hash join" en el output indica que se uso hash join.
+
+-- Forzar nested loop (deshabilitar hash join via hint):
+SELECT /*+ NO_HASH_JOIN(seguimiento_acceso, persona) */ *
+FROM seguimiento_acceso JOIN persona USING (persona_id);
+
+-- Forzar hash join explicito:
+SELECT /*+ HASH_JOIN(seguimiento_acceso, persona) */ *
+FROM seguimiento_acceso JOIN persona USING (persona_id);
+\end{lstlisting}
+
+\textit{optimizer\_trace --- equivalente al EXPLAIN VERBOSE de PostgreSQL:}
+
+\begin{lstlisting}
+SET optimizer_trace = "enabled=on";
+SELECT * FROM seguimiento_acceso NATURAL JOIN persona;
+SELECT TRACE FROM information_schema.OPTIMIZER_TRACE;
+SET optimizer_trace = "enabled=off";
+\end{lstlisting}
+
+\textit{Diferencias relevantes con PostgreSQL:}
+
+\begin{itemize}
+    \item MySQL \emph{no} tiene \emph{Merge Join} como algoritmo separado: el resultado equivalente se obtiene combinando Index Scan ordenados con nested loop. PostgreSQL/Oracle sí lo exponen.
+    \item Hash Join en MySQL llegó tarde (8.0.18, oct-2019); en MySQL 5.7 sólo existen Nested Loop y Block Nested Loop. Conviene tener clara la versión del motor al estudiar planes.
+    \item En lugar de \texttt{SET enable\_hashjoin = off}, MySQL usa hints \texttt{/*+ NO\_HASH\_JOIN(...) */} a nivel sentencia, no a nivel sesión.
+\end{itemize}
 
 % =====================================================
-\section{Conclusiones}
+\section*{Conclusión}
+\addcontentsline{toc}{section}{Conclusión}
 % =====================================================
 
-El práctico recorre, en orden, los tres niveles donde se puede pensar la
-ejecución de una consulta:
+El práctico recorre, en orden, los tres niveles donde se puede pensar la ejecución de una consulta:
 
 \begin{enumerate}
-    \item \textbf{Algoritmos físicos} (Ejercicio 1): elegir A1\ldots A11
-    en función de qué índices hay y de la forma del predicado.
-    \item \textbf{Reescritura algebraica} (Ejercicios 2 y 3): aplicar reglas
-    de equivalencia para empujar selecciones y proyecciones hacia las hojas
-    y reordenar joins para minimizar tamaños intermedios.
-    \item \textbf{Catálogo y planner reales} (Ejercicios 4 y 5): identificar
-    en PostgreSQL dónde viven las estadísticas que el optimizador usa, y
-    cómo se cambia el plan observado actuando sobre ellas (índices,
-    \texttt{ANALYZE}, reescritura con \texttt{ORDER BY}, banderas como
-    \texttt{enable\_hashjoin}).
+    \item \textbf{Algoritmos físicos} (Ejercicio 1): elegir entre A1--A11 en función de qué índices hay y de la forma del predicado.
+    \item \textbf{Reescritura algebraica} (Ejercicios 2 y 3): aplicar reglas de equivalencia para empujar selecciones y proyecciones hacia las hojas y reordenar joins para minimizar tamaños intermedios.
+    \item \textbf{Catálogo y planner reales} (Ejercicios 4 y 5): identificar en PostgreSQL dónde viven las estadísticas que el optimizador usa, y cómo cambia el plan observado actuando sobre ellas (índices, \texttt{ANALYZE}, reescritura con \texttt{ORDER BY}, banderas como \texttt{enable\_hashjoin}).
 \end{enumerate}
 
-La idea común detrás de los cinco ejercicios es: \emph{el plan de ejecución
-no es único}, y la diferencia de costos entre planes equivalentes puede ser
-de varios órdenes de magnitud; la tarea del DBA y del programador SQL es
-darle al motor estadísticas y estructuras que le permitan elegir bien.
+La idea común detrás de los cinco ejercicios es: \emph{el plan de ejecución no es único}, y la diferencia de costos entre planes equivalentes puede ser de varios órdenes de magnitud; la tarea del DBA y del programador SQL es darle al motor estadísticas y estructuras que le permitan elegir bien. En MySQL 8+, la herramienta análoga a \texttt{EXPLAIN (ANALYZE, BUFFERS)} es \texttt{EXPLAIN ANALYZE}; el equivalente de las banderas \texttt{enable\_*} son los hints \texttt{/*+ ... */} en la propia sentencia; y los histogramas (que PostgreSQL arma por defecto) en MySQL deben pedirse explícitamente con \texttt{ANALYZE TABLE ... UPDATE HISTOGRAM}.
 
 \end{document}

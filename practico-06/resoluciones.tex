@@ -50,7 +50,7 @@
         BEGIN,COMMIT,ROLLBACK,START,TRANSACTION,ISOLATION,LEVEL,
         SERIALIZABLE,REPEATABLE,READ,COMMITTED,UNCOMMITTED,
         SESSION,USE,FOR,DEFERRABLE,INITIALLY,DEFERRED,IMMEDIATE,
-        ALTER,CONSTRAINT,CONSTRAINTS},
+        ALTER,CONSTRAINT,CONSTRAINTS,LOCK,SHARE,MODE,SHOW,STATUS},
     sensitive=false,
     morecomment=[l]{--},
     morestring=[b]'
@@ -102,6 +102,14 @@
 % --- Hipervínculos ---
 \usepackage[hidelinks,bookmarks=true]{hyperref}
 
+% --- Comandos auxiliares (mismos que en Prácticos 1-5) ---
+\newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+\newcommand{\bloqueConsigna}{\itemcabecera{Consigna}}
+\newcommand{\bloqueIdea}{\itemcabecera{Idea}}
+\newcommand{\bloqueSolucion}{\itemcabecera{Soluci\'on}}
+\newcommand{\bloquePorque}{\itemcabecera{Por qu\'e funciona / por qu\'e se rompe}}
+\newcommand{\bloqueMySQL}{\itemcabecera{En MySQL 8+}}
+
 \title{Trabajo Práctico N.\textsuperscript{o} 6:
        Transacciones y Control de Concurrencia\\[4pt]
        \large Bases de Datos II}
@@ -144,90 +152,45 @@
 \section{Introducción}
 % =====================================================
 
-El Práctico 6 cierra el cuatrimestre con los conceptos sobre los que se
-apoya cualquier base de datos multiusuario: \textbf{transacciones} y
-\textbf{control de concurrencia}. Los ocho ejercicios se reparten en dos
-mitades complementarias:
+El Práctico 6 cierra el cuatrimestre con los conceptos sobre los que se apoya cualquier base de datos multiusuario: \textbf{transacciones} y \textbf{control de concurrencia}. Los ocho ejercicios se reparten en dos mitades complementarias:
 
 \begin{itemize}
-    \item \textbf{Ejercicios 1--3}: parte teórica. Planificaciones
-    concurrentes, serializabilidad por conflicto, protocolo de dos fases y
-    protocolo de marcas temporales.
-    \item \textbf{Ejercicios 4--8}: parte práctica. Pruebas reales en MySQL
-    (transacciones, niveles de aislamiento, lectura no repetible) y en
-    PostgreSQL (constraints deferibles, MVCC con \texttt{xmin}/\texttt{xmax}).
+    \item \textbf{Ejercicios 1--3}: parte teórica. Planificaciones concurrentes, serializabilidad por conflicto, protocolo de dos fases y protocolo de marcas temporales.
+    \item \textbf{Ejercicios 4--8}: parte práctica. Pruebas reales en MySQL (transacciones, niveles de aislamiento, lectura no repetible) y en PostgreSQL (constraints deferibles, MVCC con \texttt{xmin}/\texttt{xmax}).
 \end{itemize}
 
-El soporte teórico es el Teórico~8: definición de transacción, propiedades
-ACID, estados de una transacción, schedules, conflictos, grafos de
-precedencia, recuperabilidad, protocolos de bloqueo (2PL y variantes) y
-protocolo de marcas temporales.
+Cada ejercicio sigue siempre la misma estructura: \textbf{Consigna} (texto literal del PDF), \textbf{Idea} (lectura natural y concepto detrás), \textbf{Solución} (schedule, grafo, secuencia 2PL, tabla de marcas o SQL transaccional según corresponda), \textbf{Por qué funciona / por qué se rompe} (lógica de la serializabilidad o de la anomalía) y \textbf{En MySQL 8+} (equivalente en InnoDB cuando aplica: niveles de aislamiento, \texttt{FOR UPDATE}, MVCC, \texttt{information\_schema.INNODB\_TRX}, limitaciones específicas como la ausencia de FKs deferibles).
 
 \begin{nota}
-\textbf{Notación.} A lo largo del documento se usa la notación corta
-$r_i(Q)$ para ``$T_i$ lee $Q$'' y $w_i(Q)$ para ``$T_i$ escribe $Q$''. Las
-asignaciones locales (por ejemplo $X := X - N$) no generan conflictos
-entre transacciones y se omiten en el análisis de schedules. Los bloqueos
-se denotan $LX_i(Q)$ (exclusivo) y $LC_i(Q)$ (compartido), y
-$UX_i(Q)$ / $UC_i(Q)$ para sus desbloqueos.
+\textbf{Notación.} A lo largo del documento se usa la notación corta $r_i(Q)$ para ``$T_i$ lee $Q$'' y $w_i(Q)$ para ``$T_i$ escribe $Q$''. Las asignaciones locales (por ejemplo $X := X - N$) no generan conflictos entre transacciones y se omiten en el análisis. Los bloqueos se denotan $LX_i(Q)$ (exclusivo) y $LC_i(Q)$ (compartido), y $UX_i(Q)$ / $UC_i(Q)$ para sus desbloqueos.
 \end{nota}
-
-\subsection*{Verificación de las resoluciones previas}
-
-Antes de redactar este documento se revisaron los ocho \texttt{README}.
-Conclusiones de la revisión:
-
-\begin{itemize}
-    \item \textbf{Ejercicio 1}: las dos planificaciones propuestas y sus
-    grafos de precedencia están correctos. Sin cambios de fondo; se
-    completaron diagramas de grafos.
-    \item \textbf{Ejercicio 2}: la planificación con 2PL puro respeta la
-    fase de crecimiento y la de decrecimiento de cada transacción. Sin
-    errores.
-    \item \textbf{Ejercicio 3}: tabla de evolución de $MT\text{-}E$ y
-    $MT\text{-}L$ correcta paso a paso; no hay rollbacks en el schedule
-    propuesto. Sin errores.
-    \item \textbf{Ejercicios 4--8}: las pruebas SQL son consistentes con
-    el comportamiento real de MySQL/InnoDB y PostgreSQL. Se ajustó la
-    redacción para enmarcar cada experimento dentro del concepto teórico
-    que ilustra (atomicidad, bloqueos, niveles de aislamiento, MVCC,
-    constraints diferidas).
-\end{itemize}
 
 % =====================================================
 \section{Ejercicio 1: Planificaciones concurrentes y serializabilidad}
 % =====================================================
 
-\paragraph{Enunciado.} Dadas:
+\bloqueConsigna
+
+Dadas las siguientes transacciones:
+
 \begin{itemize}
     \item $T_1$: \texttt{leer(X); X:=X-N; escribir(X); leer(Y); Y:=Y+N; escribir(Y);}
     \item $T_2$: \texttt{leer(X); X:=X+M; escribir(X);}
 \end{itemize}
-dar dos planificaciones concurrentes, una serializable por conflicto y otra
-no serializable, justificando con el grafo de precedencia.
 
-\subsection{Marco teórico aplicado}
+Dar dos planificaciones concurrentes, una serializable en cuanto a conflicto y la otra no, justifique su respuesta.
 
-Dos instrucciones $I_i \in T_i$ e $I_j \in T_j$ están en \textbf{conflicto}
-si acceden al mismo ítem $Q$ \emph{y al menos una} es una escritura.
-Quedan en conflicto los pares $r$-$w$, $w$-$r$ y $w$-$w$ sobre $Q$;
-$r$-$r$ no genera conflicto.
+\bloqueIdea
 
-Una planificación es \textbf{serializable por conflicto} si es
-equivalente, mediante intercambios de operaciones no conflictivas, a
-alguna planificación serial. El \emph{test del grafo de precedencia}
-construye un nodo por transacción y agrega un arco $T_i \rightarrow T_j$
-cada vez que una operación de $T_i$ precede a una de $T_j$ con la que
-está en conflicto. La planificación es serializable por conflicto si y
-sólo si el grafo es acíclico.
+Dos instrucciones $I_i \in T_i$ e $I_j \in T_j$ están en \emph{conflicto} si acceden al mismo ítem $Q$ y al menos una es escritura (pares $r$-$w$, $w$-$r$, $w$-$w$). Una planificación es \emph{serializable por conflicto} si su grafo de precedencia (un nodo por transacción, arco $T_i \to T_j$ cuando una operación de $T_i$ precede en el schedule a una operación conflictiva de $T_j$) es acíclico.
 
-\subsection{Planificación 1: serializable por conflicto}
+\bloqueSolucion
+
+\textit{Planificación 1: serializable por conflicto.}
 
 \[
 S_1 \;=\; r_1(X),\, w_1(X),\, r_2(X),\, w_2(X),\, r_1(Y),\, w_1(Y)
 \]
-
-Forma extendida (con asignaciones locales):
 
 \begin{center}
 \begin{tabular}{rll}
@@ -247,8 +210,7 @@ Paso & Transacción & Operación \\
 \end{tabular}
 \end{center}
 
-\paragraph{Análisis de conflictos.} Sólo hay accesos compartidos sobre $X$
-(a $Y$ accede únicamente $T_1$). Conflictos sobre $X$:
+Conflictos sobre $X$ (a $Y$ accede sólo $T_1$):
 
 \begin{itemize}
     \item $w_1(X)$ antes de $r_2(X)$ $\Rightarrow$ $T_1 \rightarrow T_2$.
@@ -256,7 +218,7 @@ Paso & Transacción & Operación \\
     \item $r_1(X)$ antes de $w_2(X)$ $\Rightarrow$ $T_1 \rightarrow T_2$.
 \end{itemize}
 
-\paragraph{Grafo de precedencia.}
+Grafo de precedencia:
 \begin{center}
 \begin{tikzpicture}[node distance=22mm, every node/.style={font=\footnotesize}]
     \node[draw,circle] (t1) {$T_1$};
@@ -265,16 +227,13 @@ Paso & Transacción & Operación \\
 \end{tikzpicture}
 \end{center}
 
-El grafo no tiene ciclos: $S_1$ \textbf{es serializable por conflicto}.
-Es equivalente a la planificación serial $T_1$ seguida de $T_2$.
+Sin ciclos: $S_1$ \textbf{es serializable por conflicto}, equivalente a $T_1$ seguida de $T_2$.
 
-\subsection{Planificación 2: no serializable por conflicto}
+\textit{Planificación 2: no serializable por conflicto.}
 
 \[
 S_2 \;=\; r_1(X),\, r_2(X),\, w_1(X),\, w_2(X),\, r_1(Y),\, w_1(Y)
 \]
-
-Forma extendida:
 
 \begin{center}
 \begin{tabular}{rll}
@@ -294,7 +253,7 @@ Paso & Transacción & Operación \\
 \end{tabular}
 \end{center}
 
-\paragraph{Análisis de conflictos.}
+Conflictos:
 
 \begin{itemize}
     \item $r_1(X)$ antes de $w_2(X)$ $\Rightarrow$ $T_1 \rightarrow T_2$.
@@ -302,7 +261,7 @@ Paso & Transacción & Operación \\
     \item $w_1(X)$ antes de $w_2(X)$ $\Rightarrow$ $T_1 \rightarrow T_2$.
 \end{itemize}
 
-\paragraph{Grafo de precedencia.}
+Grafo de precedencia:
 \begin{center}
 \begin{tikzpicture}[node distance=24mm, every node/.style={font=\footnotesize}]
     \node[draw,circle] (t1) {$T_1$};
@@ -312,38 +271,51 @@ Paso & Transacción & Operación \\
 \end{tikzpicture}
 \end{center}
 
-Hay un ciclo $T_1 \leftrightarrow T_2$: $S_2$ \textbf{no es serializable
-por conflicto}. La intuición detrás del problema es que cada transacción
-``ve'' el $X$ original (no el ya modificado por la otra), y al final
-ambas sobrescriben el ítem con un valor que no refleja el efecto de la
-otra.
+Hay ciclo $T_1 \leftrightarrow T_2$: $S_2$ \textbf{no es serializable por conflicto}.
+
+\bloquePorque
+
+\begin{itemize}
+    \item En $S_1$, $T_1$ termina su trabajo sobre $X$ antes de que $T_2$ empiece, así que $T_2$ ve el efecto de $T_1$ y produce un valor coherente. El orden serial equivalente es $T_1; T_2$.
+    \item En $S_2$, ambas transacciones leen el $X$ \emph{original} (porque sus lecturas anteceden a las escrituras de la otra), y luego cada una sobrescribe con un valor que no refleja el efecto de la otra: clásico \emph{lost update}.
+    \item El ciclo en el grafo es el síntoma formal: cada transacción quedó ``antes'' de la otra simultáneamente, lo que no se puede materializar en ningún orden serial.
+\end{itemize}
+
+\bloqueMySQL
+
+Concepto teórico. Aun así, los dos schedules se pueden \emph{materializar} en MySQL/InnoDB para ver cómo el motor reacciona:
+
+\begin{lstlisting}
+-- En SERIALIZABLE, InnoDB toma S-lock implicito en cada SELECT.
+-- El S2 problematico no se puede reproducir tal cual: cuando T2 quiera
+-- hacer r2(X) despues de w1(X), InnoDB la bloquea hasta que T1 confirme.
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+START TRANSACTION;  -- T1
+SELECT X FROM tab WHERE id = 1;  -- toma S-lock
+UPDATE tab SET X = X - N WHERE id = 1; -- promueve a X-lock
+
+-- Sesion 2 (T2)
+START TRANSACTION;
+SELECT X FROM tab WHERE id = 1; -- queda esperando: hay X-lock de T1
+\end{lstlisting}
+
+\textit{Diferencia clave con el modelo teórico:} InnoDB no permite arbitrariamente cualquier intercalado; los locks fuerzan que los schedules ejecutados sean serializables. Para reproducir $S_2$ haría falta bajar el nivel a \texttt{READ COMMITTED} y aceptar la posibilidad de \emph{lost update}.
 
 % =====================================================
 \section{Ejercicio 2: Protocolo de bloqueo de dos fases puro}
 % =====================================================
 
-\paragraph{Enunciado.} Las transacciones son las del Ejercicio~1: dar una
-planificación concurrente que respete el protocolo de \textbf{dos fases
-puro} (2PL básico).
+\bloqueConsigna
 
-\subsection{Marco teórico aplicado}
+Dadas las transacciones del ejercicio anterior, dar una planificación para su ejecución concurrente utilizando el protocolo de dos fases puro.
 
-El \textbf{Protocolo de Bloqueo de Dos Fases} (2PL) divide la vida de toda
-transacción en dos etapas:
+\bloqueIdea
 
-\begin{itemize}
-    \item \textbf{Fase de crecimiento}: la transacción puede solicitar
-    bloqueos, pero no puede liberarlos.
-    \item \textbf{Fase de decrecimiento}: la transacción puede liberar
-    bloqueos, pero no puede solicitar nuevos.
-\end{itemize}
+El \emph{Protocolo de Bloqueo de Dos Fases} (2PL) divide la vida de toda transacción en dos etapas: \emph{crecimiento} (solo se piden bloqueos) y \emph{decrecimiento} (solo se liberan). 2PL garantiza schedules serializables por conflicto. El protocolo \emph{puro} permite liberar bloqueos antes del \texttt{commit}, a diferencia del \emph{estricto} (los retiene hasta el commit) y el \emph{riguroso} (también difiere lecturas hasta el commit).
 
-El protocolo garantiza planificaciones \emph{serializables en cuanto a
-conflicto}. Como ambas transacciones escriben sobre $X$, hace falta
-bloqueo \textbf{exclusivo} sobre $X$ para las dos; $T_1$ además bloquea
-$Y$ en exclusivo porque también lo escribe.
+\bloqueSolucion
 
-\subsection{Planificación 2PL puro propuesta}
+Como ambas transacciones escriben sobre $X$, hace falta bloqueo \emph{exclusivo} ($LX$) sobre $X$ para las dos; $T_1$ además bloquea $Y$ porque también lo escribe.
 
 \begin{center}
 \begin{tabular}{rll}
@@ -372,96 +344,65 @@ Paso & Transacción & Operación \\
 \end{tabular}
 \end{center}
 
-\subsection{Verificación de las fases por transacción}
+\textit{Verificación de las fases:}
 
-\paragraph{$T_1$.}
+\textit{$T_1$.} Crecimiento: pasos 1--2 (adquiere $X$ y $Y$). Punto de viraje: paso 7 (libera $X$). Decrecimiento: del paso 7 en adelante; opera con los bloqueos que tenía y libera $Y$ al final (paso 17).
+
+\textit{$T_2$.} Crecimiento: paso 8 (consigue $X$). Decrecimiento: paso 14 (libera $X$). No vuelve a pedir bloqueos.
+
+\bloquePorque
+
 \begin{itemize}
-    \item Crecimiento: pasos 1 y 2 (adquiere $X$ y $Y$).
-    \item Punto de viraje: paso 7 (libera $X$).
-    \item Decrecimiento: del paso 7 en adelante; $T_1$ no vuelve a pedir
-    bloqueos, sólo opera con los que ya tenía y al final libera $Y$
-    (paso 17).
+    \item Cada transacción tiene un único punto donde pasa de crecer a decrecer: es 2PL \emph{puro}.
+    \item La ejecución es concurrente (los pasos 8--14 entrelazan operaciones de $T_2$ con $T_1$) pero el orden efectivo equivalente a sobre $X$ es serial $T_1 \rightarrow T_2$.
+    \item 2PL puro no exige retener los bloqueos hasta el \texttt{commit}: $UX_1(X)$ ocurre en el paso 7, antes del commit de $T_1$. Eso \emph{permite} la concurrencia pero abre la puerta a rollback en cascada si $T_2$ leyera escrituras no confirmadas; la variante \emph{estricta}/\emph{rigurosa} cierra ese problema reteniendo los bloqueos hasta el commit.
 \end{itemize}
 
-\paragraph{$T_2$.}
-\begin{itemize}
-    \item Crecimiento: paso 8 (consigue $X$ cuando $T_1$ lo libera).
-    \item Decrecimiento: paso 14 (libera $X$).
-    \item No vuelve a pedir bloqueos luego de liberar.
-\end{itemize}
+\bloqueMySQL
 
-\paragraph{Conclusión.} Ambas transacciones tienen un único punto donde
-pasan de crecer a decrecer: la planificación es 2PL puro. La ejecución
-es además concurrente (los pasos 8--14 entrelazan operaciones de $T_2$
-con $T_1$) y el orden efectivo equivalente es serial $T_1 \rightarrow T_2$
-sobre $X$.
+InnoDB \emph{no} usa 2PL puro: implementa \emph{2PL estricto} (\textbf{strict 2PL}) --- los bloqueos exclusivos se retienen hasta el \texttt{COMMIT}/\texttt{ROLLBACK}. Por eso un esquema como el de arriba (donde $T_1$ libera $X$ en el paso 7 \emph{sin haber commiteado}) no es expresable directamente en MySQL. Para ver cómo InnoDB serializa los accesos:
 
-\begin{nota}
-2PL puro no exige que los bloqueos se mantengan hasta el \texttt{commit}:
-los desbloqueos pueden ocurrir antes (como aquí $UX_1(X)$ en el paso~7).
-La variante que sí los retiene hasta el final es \textbf{2PL riguroso},
-que además evita el rollback en cascada.
-\end{nota}
+\begin{lstlisting}
+-- Sesion 1 (T1)
+SET autocommit = 0;
+START TRANSACTION;
+SELECT X FROM tab WHERE id=1 FOR UPDATE;  -- toma X-lock, lo retiene hasta commit
+UPDATE tab SET X = X - 10 WHERE id=1;
+
+-- Sesion 2 (T2): bloquea hasta que sesion 1 haga COMMIT
+START TRANSACTION;
+SELECT X FROM tab WHERE id=1 FOR UPDATE;  -- queda esperando
+\end{lstlisting}
+
+\textit{Diferencia clave:} en InnoDB no se puede observar la fase de decrecimiento ``antes del commit'' que sí permite 2PL puro. A cambio, se evita por construcción el rollback en cascada (porque nadie lee escrituras no confirmadas a través de X-locks).
 
 % =====================================================
 \section{Ejercicio 3: Protocolo de marcas temporales}
 % =====================================================
 
-\paragraph{Enunciado.} Dadas
+\bloqueConsigna
+
+Dadas las siguientes transacciones, dar una planificación utilizando el protocolo de marcas temporales, mostrar cómo varían $MT\text{-}E$, $MT\text{-}L$ de $X$ e $Y$.
+
 \begin{itemize}
     \item $T_1$: \texttt{leer(X); escribir(X); leer(Y); escribir(Y);}
     \item $T_2$: \texttt{leer(X); escribir(X);}
     \item $T_3$: \texttt{leer(Y); escribir(Y);}
 \end{itemize}
-dar una planificación con el \textbf{protocolo de ordenación por marcas
-temporales}, mostrando cómo evolucionan $MT\text{-}E$ y $MT\text{-}L$
-sobre $X$ y $Y$.
 
-\subsection{Marco teórico aplicado}
+\bloqueIdea
 
-A cada transacción $T_i$ se le asigna una marca $MT(T_i)$ que la ordena
-en el sistema (más chica = más vieja). Cada ítem $Q$ guarda:
+A cada transacción $T_i$ se le asigna una marca $MT(T_i)$ que la ordena (más chica = más vieja). Cada ítem $Q$ guarda $MT\text{-}E(Q)$ (mayor marca de quienes lo escribieron) y $MT\text{-}L(Q)$ (mayor marca de quienes lo leyeron). Las reglas:
 
-\begin{itemize}
-    \item $MT\text{-}E(Q)$: mayor marca de las transacciones que escribieron
-    con éxito sobre $Q$.
-    \item $MT\text{-}L(Q)$: mayor marca de las transacciones que leyeron
-    con éxito sobre $Q$.
-\end{itemize}
+\textit{$T_i$ ejecuta $r(Q)$.} Si $MT(T_i) < MT\text{-}E(Q)$: rechazo y rollback. Si no: ejecuta y $MT\text{-}L(Q) \gets \max(MT\text{-}L(Q), MT(T_i))$.
 
-Reglas del protocolo:
+\textit{$T_i$ ejecuta $w(Q)$.} Si $MT(T_i) < MT\text{-}L(Q)$ o $MT(T_i) < MT\text{-}E(Q)$: rechazo y rollback. Si no: ejecuta y $MT\text{-}E(Q) \gets MT(T_i)$.
 
-\paragraph{Lectura: $T_i$ ejecuta $r(Q)$.}
-\begin{itemize}
-    \item Si $MT(T_i) < MT\text{-}E(Q)$: la lectura se rechaza (querría
-    leer una versión que ya fue sobrescrita) y $T_i$ se retrocede.
-    \item En otro caso: se ejecuta y se actualiza
-    $MT\text{-}L(Q) \gets \max(MT\text{-}L(Q),\, MT(T_i))$.
-\end{itemize}
+\bloqueSolucion
 
-\paragraph{Escritura: $T_i$ ejecuta $w(Q)$.}
-\begin{itemize}
-    \item Si $MT(T_i) < MT\text{-}L(Q)$: el valor que produciría $T_i$ ya
-    fue necesario por una lectura posterior. Se rechaza, $T_i$ se
-    retrocede.
-    \item Si $MT(T_i) < MT\text{-}E(Q)$: $T_i$ querría escribir una
-    versión obsoleta. Se rechaza, $T_i$ se retrocede.
-    \item En otro caso: se ejecuta y se actualiza $MT\text{-}E(Q) \gets MT(T_i)$.
-\end{itemize}
+\textit{Asignación inicial:} $MT(T_1) = 1$, $MT(T_2) = 2$, $MT(T_3) = 3$. Estado inicial: $MT\text{-}E(X) = MT\text{-}L(X) = 0$, $MT\text{-}E(Y) = MT\text{-}L(Y) = 0$.
 
-\subsection{Asignación inicial}
-
-Asigno marcas crecientes a las transacciones según el orden propuesto:
-
-\[
-MT(T_1) = 1, \quad MT(T_2) = 2, \quad MT(T_3) = 3.
-\]
-
-Estado inicial de los ítems:
-$MT\text{-}E(X) = MT\text{-}L(X) = 0$, $MT\text{-}E(Y) = MT\text{-}L(Y) = 0$.
-
-\subsection{Schedule propuesto y evolución}
-
+\textit{Schedule propuesto:}
 \[
 r_1(X),\, w_1(X),\, r_2(X),\, w_2(X),\, r_1(Y),\, w_1(Y),\, r_3(Y),\, w_3(Y)
 \]
@@ -485,51 +426,45 @@ $\!MT\text{-}E(X)\!$ & $\!MT\text{-}L(X)\!$ & $\!MT\text{-}E(Y)\!$ & $\!MT\text{
 \end{tabular}
 \end{center}
 
-\subsection{Resultado final}
+\textit{Resultado final.} Sin rollbacks. $X$: $MT\text{-}E(X) = 2$, $MT\text{-}L(X) = 2$. $Y$: $MT\text{-}E(Y) = 3$, $MT\text{-}L(Y) = 3$.
 
-Sin rollbacks. Estado final:
+\bloquePorque
+
 \begin{itemize}
-    \item $X$: $MT\text{-}E(X) = 2$, $MT\text{-}L(X) = 2$.
-    \item $Y$: $MT\text{-}E(Y) = 3$, $MT\text{-}L(Y) = 3$.
+    \item El orden efectivo de conflictos respeta el orden temporal de las marcas: $T_1$ aparece antes que $T_2$ en los conflictos sobre $X$, y $T_1$ antes que $T_3$ en los conflictos sobre $Y$.
+    \item Como no hay accesos cruzados (ninguna $T_i$ con $MT$ chica intenta operar sobre un ítem ya tomado por una con $MT$ mayor), no se viola ninguna condición de retroceso.
+    \item Si el schedule hubiese sido $r_2(X), w_2(X), w_1(X)$, en el paso 3 $T_1$ querría escribir un valor obsoleto ($MT(T_1)=1 < MT\text{-}E(X)=2$): se rechazaría y $T_1$ tendría que reiniciar con una marca nueva.
 \end{itemize}
 
-\paragraph{Por qué pasa el test.} El orden efectivo de conflictos
-respeta el orden temporal de las marcas: $T_1$ aparece antes que $T_2$
-en los conflictos sobre $X$, y $T_1$ antes que $T_3$ en los conflictos
-sobre $Y$. Como no hay accesos cruzados (ninguna $T_i$ con $MT(T_i)$
-chica intenta operar sobre un ítem ``ya tomado'' por una con $MT$ mayor),
-no se viola ninguna de las condiciones de retroceso.
+\bloqueMySQL
+
+Concepto teórico. InnoDB \emph{no} implementa ordenación por marcas temporales: su mecanismo de concurrencia es 2PL estricto con detección automática de deadlocks (no usa marcas para abortar, sino que detecta ciclos en el grafo \emph{wait-for}). Por lo tanto este ejercicio no tiene reproducción directa en MySQL; lo más cercano sería usar \texttt{innodb\_deadlock\_detect} para observar cómo el motor decide qué transacción abortar cuando hay un ciclo de bloqueos.
+
+\begin{lstlisting}
+-- Inspeccion de transacciones activas y sus locks
+SELECT * FROM information_schema.INNODB_TRX;
+
+-- Activar/desactivar deteccion de deadlock
+SHOW VARIABLES LIKE 'innodb_deadlock_detect';
+\end{lstlisting}
 
 % =====================================================
 \section{Ejercicio 4: \texttt{UPDATE} y \texttt{ROLLBACK} en MySQL}
 % =====================================================
 
-\paragraph{Enunciado.} Abrir una conexión al cliente MySQL contra la base
-del Práctico~1.a, aumentar 20\% el precio de un producto que nadie más esté
-actualizando, verificar el cambio, hacer \texttt{ROLLBACK} y verificar si
-el cambio quedó almacenado o no.
+\bloqueConsigna
 
-\subsection{Marco teórico aplicado}
+Utilizando el motor de base de datos MySQL abra una conexión con la aplicación cliente MySQL (cliente en línea de comando) a la base de datos del ejercicio 1 de la práctica de repaso, modifique el precio de un producto en un 20\% (que sea un producto que no esté actualizando ninguno de sus compañeros), verifique que se ha cambiado el precio y luego haga un rollback de la transacción. Verifique si el cambio de precio se almacenó o no.
 
-El experimento ilustra la propiedad de \textbf{atomicidad} (la ``A'' de
-ACID): una transacción o se aplica completa o no se aplica en absoluto.
-\texttt{ROLLBACK} es la primitiva que materializa esa propiedad cuando
-la transacción todavía no fue confirmada.
+\bloqueIdea
 
-Mientras una transacción esté abierta (entre \texttt{START TRANSACTION}
-y el \texttt{COMMIT}/\texttt{ROLLBACK}), las escrituras son visibles
-\emph{dentro} de ella, pero no son persistentes ni visibles para otras
-transacciones (en niveles \texttt{READ COMMITTED} o más fuertes).
+El experimento ilustra la propiedad de \textbf{atomicidad} (la ``A'' de ACID): una transacción o se aplica completa o no se aplica en absoluto. \texttt{ROLLBACK} es la primitiva que materializa esa propiedad cuando la transacción todavía no fue confirmada. Mientras la transacción esté abierta, las escrituras son visibles \emph{dentro} de ella pero no son persistentes ni visibles desde afuera (en \texttt{READ COMMITTED} o más fuerte).
 
-\subsection{Ejecución sugerida}
-
-Conexión por línea de comandos:
+\bloqueSolucion
 
 \begin{lstlisting}[style=shellstyle]
 mysql -u root -p
 \end{lstlisting}
-
-Una vez dentro del cliente:
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -569,51 +504,47 @@ FROM producto
 WHERE cod_producto = 104;
 \end{lstlisting}
 
-\subsection{Resultado esperado}
-
-Con los datos cargados en el Práctico~1, para \texttt{cod\_producto = 104}:
+\textit{Resultado esperado.} Con los datos del Práctico 1, para \texttt{cod\_producto = 104}:
 
 \begin{itemize}
-    \item Precio inicial: \texttt{450000.00}
-    \item Tras el \texttt{UPDATE} (visible \emph{sólo dentro} de la transacción): \texttt{540000.00}
+    \item Precio inicial: \texttt{450000.00}.
+    \item Tras el \texttt{UPDATE} (visible solo dentro de la transacción): \texttt{540000.00}.
     \item Tras el \texttt{ROLLBACK}: \texttt{450000.00} (vuelve al valor original).
 \end{itemize}
 
-\textbf{Conclusión}: el cambio no quedó persistido. \texttt{ROLLBACK}
-deshace todas las escrituras realizadas desde \texttt{START TRANSACTION}.
-Es la atomicidad en acción.
+\bloquePorque
 
-\subsection{Verificación opcional desde una segunda sesión}
+\begin{itemize}
+    \item \texttt{ROLLBACK} usa los \emph{undo logs} de InnoDB: cada modificación se registra en una versión paralela; al hacer rollback, el motor reinstaura las versiones originales y libera los locks tomados.
+    \item Hasta el \texttt{COMMIT}, las escrituras viven en undo/redo logs y \emph{no son visibles} desde otras sesiones (asumiendo \texttt{READ COMMITTED} o más fuerte). Por eso una segunda sesión consultando \texttt{cod\_producto = 104} mientras la primera tiene la transacción abierta verá el valor original.
+    \item Si la sesión se cae a mitad de camino (antes del commit), InnoDB hace rollback automático al recuperarse: misma garantía de atomicidad.
+\end{itemize}
 
-Abriendo otra conexión y consultando \texttt{cod\_producto = 104}
-\emph{antes} del \texttt{ROLLBACK} en la primera sesión, en
-\texttt{READ COMMITTED} o \texttt{REPEATABLE READ} la segunda sesión sigue
-viendo \texttt{450000.00}: nunca vio el valor sucio.
+\bloqueMySQL
+
+La consigna ya pide MySQL; la \textit{Solución} es la versión MySQL 8+. Notas adicionales:
+
+\begin{itemize}
+    \item \texttt{SET autocommit = 0} convierte la sesión en modo transaccional. Sin esto, cada sentencia se commitea sola y \texttt{ROLLBACK} no tendría nada que deshacer.
+    \item Alternativa equivalente: \texttt{START TRANSACTION} ya inicia una transacción explícita aunque \texttt{autocommit} esté en 1.
+    \item Para confirmar que el lock se liberó: \texttt{SELECT * FROM information\_schema.INNODB\_TRX;} no debe mostrar la transacción tras el rollback.
+\end{itemize}
 
 % =====================================================
 \section{Ejercicio 5: Dos sesiones MySQL en SERIALIZABLE}
 % =====================================================
 
-\paragraph{Enunciado.} Abrir dos conexiones a la base del Práctico~1.a en
-nivel \texttt{SERIALIZABLE}, intentar modificar el mismo registro de
-\texttt{cliente} desde las dos transacciones y observar qué pasa. Cerrar
-ambas con \texttt{COMMIT}.
+\bloqueConsigna
 
-\subsection{Marco teórico aplicado}
+Utilizando el motor de base de datos MySQL, abra dos conexiones a la base de datos del ejercicio 1 de la práctica de repaso, las dos en modo de transacción serializable, intente modificar un mismo registro de la tabla cliente por medio de las dos transacciones. ¿Qué sucede? Para finalizar realice el commit de ambas transacciones.
 
-El nivel \texttt{SERIALIZABLE} es el más estricto definido por SQL\,92:
-no permite lecturas sucias, lecturas no repetibles, ni \emph{phantoms}.
-En MySQL/InnoDB se implementa con bloqueos: lectura compartida
-(\texttt{LOCK IN SHARE MODE}) implícita en cada \texttt{SELECT}, y
-bloqueo exclusivo en cada modificación.
+\bloqueIdea
 
-Cuando dos transacciones intentan modificar el mismo registro, la segunda
-queda \textbf{esperando} el lock que tiene la primera; la concurrencia
-sobre esa fila se convierte de hecho en ejecución serial.
+El nivel \texttt{SERIALIZABLE} es el más estricto del estándar SQL\,92: prohíbe lecturas sucias, no repetibles y phantoms. En MySQL/InnoDB se implementa con \emph{locks}: cada \texttt{SELECT} toma S-lock implícito, cada modificación toma X-lock. Cuando dos transacciones intentan modificar el mismo registro, la segunda queda esperando el lock que tiene la primera y la concurrencia sobre esa fila se vuelve, en efecto, serial.
 
-\subsection{Prueba propuesta (\texttt{cliente} con \texttt{nro\_cliente = 1})}
+\bloqueSolucion
 
-\subsubsection*{Sesión A (Terminal 1)}
+\textit{Sesión A (Terminal 1):}
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -631,10 +562,9 @@ SET direccion = 'San Martin 123 - A'
 WHERE nro_cliente = 1;
 \end{lstlisting}
 
-En este punto la fila $\texttt{nro\_cliente} = 1$ queda con bloqueo
-exclusivo de fila tomado por A.
+En este punto la fila $\texttt{nro\_cliente} = 1$ queda con X-lock tomado por A.
 
-\subsubsection*{Sesión B (Terminal 2)}
+\textit{Sesión B (Terminal 2):}
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -645,53 +575,70 @@ START TRANSACTION;
 
 SELECT nro_cliente, direccion
 FROM cliente
-WHERE nro_cliente = 1;   -- queda esperando (lock S vs X)
+WHERE nro_cliente = 1;   -- queda esperando (S-lock vs X-lock)
 
 UPDATE cliente
 SET direccion = 'San Martin 123 - B'
 WHERE nro_cliente = 1;   -- queda esperando si paso el SELECT
 \end{lstlisting}
 
-\paragraph{Qué se observa.} La sentencia de B queda colgada esperando
-que A libere el lock. No hay ejecución concurrente real sobre esa fila:
-el motor las serializa.
+La sentencia de B queda colgada esperando el lock de A. No hay ejecución concurrente real sobre esa fila.
 
-\subsubsection*{Cierre pedido por el enunciado}
+\textit{Cierre pedido:}
 
 \begin{enumerate}
-    \item En Sesión A: \texttt{COMMIT;}
-    \item En Sesión B se desbloquea y la operación pendiente prosigue.
-    \item En Sesión B: \texttt{COMMIT;}
+    \item En Sesión A: \texttt{COMMIT;}.
+    \item Sesión B se desbloquea y la operación pendiente prosigue.
+    \item En Sesión B: \texttt{COMMIT;}.
 \end{enumerate}
 
-\paragraph{Resultado final.} Verificando con
+\textit{Resultado final:}
 
 \begin{lstlisting}
 SELECT nro_cliente, direccion FROM cliente WHERE nro_cliente = 1;
+-- 'San Martin 123 - B'  (B se confirmo despues de A)
 \end{lstlisting}
 
-queda \texttt{'San Martin 123 - B'} porque B se confirmó después de A.
-Si la espera supera \texttt{innodb\_lock\_wait\_timeout} (50\,s por
-defecto), MySQL aborta la transacción con el error 1205
-(\texttt{Lock wait timeout exceeded}).
+\bloquePorque
+
+\begin{itemize}
+    \item En \texttt{SERIALIZABLE}, InnoDB convierte todos los \texttt{SELECT} en lecturas con S-lock implícito. Si A ya tiene X-lock sobre la fila, B no puede ni siquiera leerla hasta que A confirme.
+    \item Si la espera supera \texttt{innodb\_lock\_wait\_timeout} (50 s por defecto), MySQL aborta la transacción con el error \textbf{1205} (\emph{Lock wait timeout exceeded}). El default puede modificarse a nivel sesión: \texttt{SET innodb\_lock\_wait\_timeout = 5;}.
+    \item Si las dos transacciones leyeran filas distintas y luego se cruzaran en sentido opuesto, podría producirse \emph{deadlock}; InnoDB lo detecta y aborta una de las dos con el error \textbf{1213}.
+\end{itemize}
+
+\bloqueMySQL
+
+La consigna ya pide MySQL. Notas adicionales sobre \texttt{SERIALIZABLE} en InnoDB:
+
+\begin{itemize}
+    \item En \texttt{REPEATABLE READ} (el default) los \texttt{SELECT} normales se sirven desde un \emph{snapshot} MVCC sin tomar locks, y solo \texttt{SELECT ... FOR UPDATE}/\texttt{FOR SHARE} toman locks explícitos. En \texttt{SERIALIZABLE}, todo \texttt{SELECT} pasa implícitamente a \texttt{LOCK IN SHARE MODE}.
+    \item Para diagnosticar el bloqueo en tiempo real:
+\end{itemize}
+
+\begin{lstlisting}
+-- Que transacciones estan activas y cuanto esperaron
+SELECT trx_id, trx_state, trx_started, trx_mysql_thread_id, trx_query
+FROM information_schema.INNODB_TRX;
+
+-- Que sesion bloquea a que sesion (MySQL 8+: tabla performance_schema)
+SELECT * FROM performance_schema.data_locks;
+SELECT * FROM performance_schema.data_lock_waits;
+\end{lstlisting}
 
 % =====================================================
 \section{Ejercicio 6: Lectura no repetible}
 % =====================================================
 
-\paragraph{Enunciado.} Diseñar una prueba en MySQL donde una misma
-transacción, leyendo dos veces el mismo registro (sin modificarlo),
-obtenga valores distintos. Indicar qué niveles de aislamiento lo permiten.
+\bloqueConsigna
 
-\subsection{Marco teórico aplicado}
+Diseñe una prueba en MySQL donde se pueda ver que una transacción en diferentes lecturas del mismo registro devuelva diferentes valores (sin que esta transacción actualice el registro). ¿Qué niveles de aislamiento permiten esto?
 
-La \textbf{lectura no repetible} (\emph{non-repeatable read}) es uno de
-los tres fenómenos clásicos asociados a niveles de aislamiento débiles.
-Sucede cuando una transacción $T_1$ lee un registro, una segunda
-transacción $T_2$ lo modifica y commitea, y $T_1$ lee de nuevo el
-registro encontrando un valor distinto. Lo que se rompió no es la
-durabilidad de $T_2$ ---es legítimo que confirme--- sino la sensación de
-``mundo estable'' que debería tener $T_1$ durante su vida.
+\bloqueIdea
+
+La \emph{lectura no repetible} (\emph{non-repeatable read}) es una de las tres anomalías clásicas. Sucede cuando $T_1$ lee un registro, $T_2$ lo modifica y commitea, y $T_1$ lee de nuevo encontrando un valor distinto. Lo que se rompió no es la durabilidad de $T_2$, sino la sensación de ``mundo estable'' que debería tener $T_1$ durante su vida.
+
+\bloqueSolucion
 
 \begin{center}
 \begin{tabular}{lccc}
@@ -700,15 +647,13 @@ Nivel & Lectura sucia & No repetible & Phantom \\
 \midrule
 \texttt{READ UNCOMMITTED} & Posible    & Posible    & Posible \\
 \texttt{READ COMMITTED}   & No posible & Posible    & Posible \\
-\texttt{REPEATABLE READ}  & No posible & No posible & Posible (raro) \\
+\texttt{REPEATABLE READ}  & No posible & No posible & Posible (raro en InnoDB) \\
 \texttt{SERIALIZABLE}     & No posible & No posible & No posible \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\subsection{Prueba (\texttt{producto.cod\_producto = 102})}
-
-\subsubsection*{Sesión A (la que sólo lee)}
+\textit{Sesión A (la que solo lee):}
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -722,7 +667,7 @@ FROM producto
 WHERE cod_producto = 102;       -- supongamos 8000.00
 \end{lstlisting}
 
-\subsubsection*{Sesión B (la que modifica entre lecturas de A)}
+\textit{Sesión B (la que modifica entre lecturas de A):}
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -736,7 +681,7 @@ WHERE cod_producto = 102;
 COMMIT;                          -- confirma la modificacion
 \end{lstlisting}
 
-\subsubsection*{Vuelta a Sesión A: segunda lectura del mismo registro}
+\textit{Vuelta a Sesión A: segunda lectura del mismo registro.}
 
 \begin{lstlisting}
 SELECT cod_producto, precio
@@ -746,77 +691,68 @@ WHERE cod_producto = 102;       -- ahora 8500.00
 COMMIT;
 \end{lstlisting}
 
-A ve un valor distinto en dos lecturas \emph{dentro de la misma
-transacción} sin haberlo modificado: lectura no repetible.
+A ve un valor distinto en dos lecturas dentro de la misma transacción sin haberlo modificado: lectura no repetible.
 
-\subsection{Niveles de aislamiento que lo permiten}
-
-En MySQL/InnoDB:
+\textit{Niveles que lo permiten en MySQL/InnoDB:}
 
 \begin{itemize}
     \item \texttt{READ UNCOMMITTED} y \texttt{READ COMMITTED}: lo permiten.
-    \item \texttt{REPEATABLE READ} y \texttt{SERIALIZABLE}: no lo permiten.
-    En \texttt{REPEATABLE READ} (el default de InnoDB) las lecturas
-    consistentes se sirven contra un \emph{snapshot} fijo en el primer
-    \texttt{SELECT}, así que la segunda lectura devuelve el mismo valor
-    que la primera incluso si B confirmó cambios en el medio.
+    \item \texttt{REPEATABLE READ} y \texttt{SERIALIZABLE}: no lo permiten. En \texttt{REPEATABLE READ} (default de InnoDB), las lecturas consistentes se sirven contra un snapshot fijo en el primer \texttt{SELECT}.
 \end{itemize}
 
-\paragraph{Verificación complementaria.} Repitiendo la prueba con
-\texttt{REPEATABLE READ} en la sesión A:
+\textit{Verificación complementaria}: repitiendo con \texttt{REPEATABLE READ} en la sesión A, la segunda lectura devuelve el valor original (\texttt{8000.00}):
 
 \begin{lstlisting}
 SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 \end{lstlisting}
 
-la segunda lectura de A devuelve el valor original (\texttt{8000.00}),
-demostrando que el snapshot oculta los commits posteriores de B.
+\bloquePorque
+
+\begin{itemize}
+    \item En \texttt{READ COMMITTED}, cada \texttt{SELECT} toma un snapshot \emph{nuevo} que refleja todos los commits visibles en ese momento. Por eso B (que commiteó entre las dos lecturas de A) se ve.
+    \item En \texttt{REPEATABLE READ}, el snapshot se establece en el primer \texttt{SELECT} de la transacción y se mantiene hasta el fin. InnoDB sirve todas las lecturas posteriores contra ese snapshot, ignorando commits de otras transacciones.
+    \item En \texttt{READ UNCOMMITTED}, ni siquiera hace falta que B commitee: A puede llegar a ver las escrituras no confirmadas de B (lectura sucia).
+\end{itemize}
+
+\bloqueMySQL
+
+La consigna ya pide MySQL. Vale anotar que InnoDB tiene una particularidad respecto del estándar SQL: en \texttt{REPEATABLE READ}, gracias a los \emph{next-key locks} (locks combinados sobre fila + gap), InnoDB \emph{también previene phantoms} en muchos casos en los que el estándar SQL los permite. Por eso la tabla de anomalías de InnoDB es más estricta que la teórica para \texttt{REPEATABLE READ}.
 
 % =====================================================
 \section{Ejercicio 7: Deferrable Constraints en PostgreSQL}
 % =====================================================
 
-\paragraph{Enunciado.} Sobre el esquema
-\begin{itemize}
-    \item \texttt{cliente(\underline{dni}, nombre, apellido, dirección, tarifa)}
-    \item \texttt{automovil(\underline{patente}, marca, modelo, dni, nro\_categoria)}
-    \item \texttt{categoría(\underline{nro\_categoria}, tasa)}
-    \item \texttt{taller(\underline{nro\_taller}, nombre, dirección)}
-    \item \texttt{accidente(\underline{nro\_accidente}, dni, patente, código\_taller, fecha, costo)}
-\end{itemize}
-considerar una transacción que inserta primero en \texttt{accidente} (cuyo
-\texttt{patente} todavía no existe) y \emph{después} inserta en
-\texttt{automovil} la \texttt{patente} faltante. Resolver:
+\bloqueConsigna
 
-\begin{enumerate}[label=(\alph*)]
-    \item ¿Qué ocurre con el esquema normal?
-    \item Modificar el esquema para que la transacción no falle.
-    \item Modificar el esquema para que sí falle.
+Considere la siguiente base de datos implementada en postgres:
+
+\begin{itemize}
+    \item \texttt{Cliente(\underline{dni}, nombre, apellido, dirección, tarifa)}
+    \item \texttt{Automovil(\underline{patente}, marca, modelo, dni, nro\_categoria)}
+    \item \texttt{Categoría(\underline{nro\_categoria}, tasa)}
+    \item \texttt{Taller(\underline{nro\_taller}, nombre, dirección)}
+    \item \texttt{Accidente(\underline{nro\_accidente}, dni, patente, código\_taller, fecha, costo)}
+\end{itemize}
+
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item Considere una transacción que realice lo siguiente:
+\begin{lstlisting}
+INSERT INTO Accidente values (1,'DNI 1', 'PAT 1', 1,'2009-10-10',234);
+-- el automovil no esta registrado, se registra en la proxima instruccion
+INSERT INTO Automovil values ( 'PAT 1', ..........);
+\end{lstlisting}
+    \textbf{Hint:} investigue Deferrable Constraints.
+    \item Modifique el esquema de la base de datos de tal manera que la ejecución de la transacción anterior no genere ninguna excepción.
+    \item Modifique el esquema de la base de datos de tal manera que la ejecución de la transacción anterior genere una excepción.
 \end{enumerate}
 
-\subsection{Marco teórico aplicado}
+\bloqueIdea
 
-Las \textbf{Foreign Keys} en SQL pueden chequearse de dos maneras:
+Las \emph{Foreign Keys} en SQL estándar pueden chequearse de dos maneras: \emph{inmediata} (después de cada sentencia, default) o \emph{diferida} (hasta el \texttt{COMMIT}). La transacción del enunciado tiene una inconsistencia transitoria (insertar un accidente que referencia un automóvil aún no cargado), por lo que solo funciona si la FK es \texttt{DEFERRABLE INITIALLY DEFERRED}.
 
-\begin{itemize}
-    \item \textbf{Inmediata} (default): el motor verifica la integridad
-    después de cada sentencia. Si la constraint no se cumple en ese
-    momento, la sentencia falla.
-    \item \textbf{Diferida} (\texttt{DEFERRABLE INITIALLY DEFERRED}): la
-    verificación se posterga hasta el \texttt{COMMIT}. Permite operaciones
-    transitoriamente inconsistentes dentro de la transacción, siempre que
-    al confirmar todo cuadre.
-\end{itemize}
+\bloqueSolucion
 
-La transacción del enunciado tiene una inconsistencia transitoria (insertar
-un accidente que referencia un automóvil aún no cargado), por lo que sólo
-funciona si la FK \texttt{accidente.patente $\rightarrow$ automovil.patente}
-es deferible.
-
-\subsection{a) Comportamiento con esquema normal}
-
-Con FK inmediata, el primer \texttt{INSERT} falla porque
-\texttt{accidente.patente = 'PAT1'} no existe en \texttt{automovil}:
+\textit{a) Comportamiento con esquema normal (FK inmediata).} El primer \texttt{INSERT} falla:
 
 \begin{lstlisting}
 BEGIN;
@@ -835,9 +771,7 @@ VALUES ('PAT1', 'FIAT', 2010, 30111222, 1);
 COMMIT;        -- ya no aplica: la transaccion esta abortada
 \end{lstlisting}
 
-\subsection{b) Esquema que evita la excepción}
-
-Hacer la FK deferible y diferirla por defecto:
+\textit{b) Esquema que evita la excepción.} Hacer la FK deferible y diferirla por defecto:
 
 \begin{lstlisting}
 ALTER TABLE practico1c.accidente
@@ -845,7 +779,7 @@ ALTER TABLE practico1c.accidente
     DEFERRABLE INITIALLY DEFERRED;
 \end{lstlisting}
 
-Con eso la transacción anterior funciona tal cual:
+Con eso la transacción funciona tal cual:
 
 \begin{lstlisting}
 BEGIN;
@@ -864,11 +798,7 @@ VALUES ('PAT1', 'FIAT', 2010, 30111222, 1);
 COMMIT;       -- recien aqui se valida la FK; en este momento PAT1 existe
 \end{lstlisting}
 
-No hay excepción.
-
-\subsection{c) Esquema que fuerza excepción}
-
-Volver la FK a no deferible (chequeo inmediato):
+\textit{c) Esquema que fuerza excepción.} Volver la FK a no deferible:
 
 \begin{lstlisting}
 ALTER TABLE practico1c.accidente
@@ -876,57 +806,66 @@ ALTER TABLE practico1c.accidente
     NOT DEFERRABLE;
 \end{lstlisting}
 
-La misma transacción vuelve a fallar en el primer \texttt{INSERT}
-exactamente como en~(a).
+La misma transacción vuelve a fallar exactamente como en (a).
 
-\subsection{Consulta de control}
-
-Para inspeccionar el estado de las constraints:
+\textit{Consulta de control:}
 
 \begin{lstlisting}
 SELECT conname, condeferrable, condeferred
 FROM pg_constraint
 WHERE conrelid = 'practico1c.accidente'::regclass
   AND conname  = 'fk_accidente_automovil';
+-- condeferrable=t, condeferred=t  -> caso (b)
+-- condeferrable=f                  -> caso (c)
 \end{lstlisting}
 
+\bloquePorque
+
 \begin{itemize}
-    \item \texttt{condeferrable = true}, \texttt{condeferred = true}
-    $\Rightarrow$ \texttt{DEFERRABLE INITIALLY DEFERRED} (caso b).
-    \item \texttt{condeferrable = false} $\Rightarrow$ \texttt{NOT DEFERRABLE} (caso c).
+    \item Con FK inmediata, PostgreSQL ejecuta el chequeo al final de cada \texttt{INSERT}: el primero falla y la transacción queda abortada (se ignoran las sentencias siguientes hasta el \texttt{COMMIT}, que se convierte en \texttt{ROLLBACK} implícito).
+    \item Con \texttt{DEFERRABLE INITIALLY DEFERRED}, el chequeo se posterga hasta el \texttt{COMMIT}: el orden de los \texttt{INSERT} dentro de la transacción no importa siempre que el estado final cumpla todas las constraints.
+    \item Las constraints diferidas son la herramienta canónica para insertar ciclos de referencias (A apunta a B y B apunta a A) o cargar bulk de datos de tablas relacionadas sin orden topológico.
 \end{itemize}
+
+\bloqueMySQL
+
+\textbf{InnoDB no soporta foreign keys deferibles.} Todas las FKs se chequean inmediatamente después de cada sentencia. Esta es una limitación bien conocida y documentada del motor. Hay dos workarounds:
+
+\begin{itemize}
+    \item \textbf{Reordenar los \texttt{INSERT}}: insertar primero en \texttt{automovil} y después en \texttt{accidente}. Es la solución preferida si se controla el código.
+    \item \textbf{Desactivar temporalmente el chequeo de FKs:} \texttt{SET FOREIGN\_KEY\_CHECKS = 0;} antes de los inserts y \texttt{SET FOREIGN\_KEY\_CHECKS = 1;} después. \textbf{No es equivalente} a \texttt{DEFERRED}: si al final hay inconsistencias, MySQL no las detecta (a diferencia de PostgreSQL que valida al \texttt{COMMIT}). Útil solo para cargas controladas (importación de dumps).
+\end{itemize}
+
+\begin{lstlisting}
+-- Workaround MySQL (NO equivale a DEFERRED en PostgreSQL):
+SET FOREIGN_KEY_CHECKS = 0;
+START TRANSACTION;
+INSERT INTO accidente VALUES (1, 'DNI1', 'PAT1', 1, '2009-10-10', 234);
+INSERT INTO automovil VALUES ('PAT1', 'FIAT', 2010, ...);
+COMMIT;
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- IMPORTANTE: si tras el SET FOREIGN_KEY_CHECKS=1 quedan inconsistencias,
+-- MySQL las acepta. PostgreSQL en cambio aborta el COMMIT.
+\end{lstlisting}
+
+\textit{Diferencia clave con PostgreSQL/Oracle/SQL estándar:} la cláusula \texttt{DEFERRABLE INITIALLY DEFERRED} es estándar SQL y PostgreSQL/Oracle la soportan; MySQL la \emph{ignora silenciosamente} si se la incluye en \texttt{CREATE TABLE}. La parte (b) del ejercicio se puede resolver de forma idiomática solo en motores que respeten el estándar.
 
 % =====================================================
 \section{Ejercicio 8: MVCC en PostgreSQL (\texttt{xmin} / \texttt{xmax})}
 % =====================================================
 
-\paragraph{Enunciado.} Sobre la base del Práctico~SQL (ejercicio b),
-diseñar y ejecutar una prueba donde dos transacciones vean valores
-distintos para la misma fila, observando los valores \texttt{xmin} y
-\texttt{xmax}.
+\bloqueConsigna
 
-\subsection{Marco teórico aplicado}
+Utilizando postgres sobre la base de datos definida en el ejercicio b) de la práctica de SQL, diseñe y ejecute una prueba donde dos transacciones vean diferentes valores para la misma fila. Observe los valores xmin y xmax.
 
-PostgreSQL implementa \textbf{MVCC} (\emph{Multiversion Concurrency
-Control}): cada \texttt{UPDATE} no machaca la versión vieja sino que
-crea una versión nueva. Cada tupla tiene dos columnas de sistema:
+\bloqueIdea
 
-\begin{itemize}
-    \item \texttt{xmin}: identificador (XID) de la transacción que
-    \emph{insertó} esa versión.
-    \item \texttt{xmax}: XID de la transacción que la \emph{invalida}
-    (vía \texttt{UPDATE} o \texttt{DELETE}); \texttt{0} si todavía está
-    viva.
-\end{itemize}
+PostgreSQL implementa \emph{MVCC} (Multi-Version Concurrency Control): cada \texttt{UPDATE} no machaca la versión vieja sino que crea una versión nueva. Cada tupla tiene dos columnas de sistema: \texttt{xmin} (XID de la transacción que la insertó) y \texttt{xmax} (XID de la transacción que la invalida; 0 si está viva). Las lecturas no toman lock: el snapshot decide cuál de las versiones ver, permitiendo que dos transacciones concurrentes vean valores distintos para la misma fila sin esperarse.
 
-Las lecturas no toman bloqueo: el snapshot de la transacción lectora
-decide cuál de las versiones ver. Esto permite que dos transacciones
-concurrentes vean valores distintos para la misma fila sin esperar la
-una a la otra.
+\bloqueSolucion
 
-\subsection{Prueba (\texttt{vehiculo.patente = 'AA123BB'})}
-
-\subsubsection*{Sesión A --- transacción $T_A$}
+\textit{Sesión A --- transacción $T_A$:}
 
 \begin{lstlisting}
 BEGIN;
@@ -949,18 +888,9 @@ WHERE patente = 'AA123BB';
 -- NO HACER COMMIT TODAVIA
 \end{lstlisting}
 
-Lo esperado dentro de $T_A$:
+Dentro de $T_A$: antes del \texttt{UPDATE} se ve la versión original (con su \texttt{xmin} y \texttt{xmax = 0}); después del \texttt{UPDATE}, $T_A$ ve la nueva versión (\texttt{xmin = tx\_a}, \texttt{xmax = 0}). La versión vieja queda con \texttt{xmax = tx\_a} pero $T_A$ ya no la ve.
 
-\begin{itemize}
-    \item Antes del \texttt{UPDATE}: se ve el valor original.
-    Esa versión tiene \texttt{xmin} con el XID de la transacción que la
-    creó y \texttt{xmax = 0}.
-    \item Después del \texttt{UPDATE}: la versión visible para $T_A$ es
-    la nueva, con \texttt{xmin = tx\_a} y \texttt{xmax = 0}. La versión
-    vieja queda con \texttt{xmax = tx\_a}, pero $T_A$ ya no la ve.
-\end{itemize}
-
-\subsubsection*{Sesión B --- transacción $T_B$, en paralelo, antes del commit de A}
+\textit{Sesión B --- transacción $T_B$, en paralelo, antes del commit de A:}
 
 \begin{lstlisting}
 BEGIN;
@@ -973,33 +903,17 @@ FROM vehiculo
 WHERE patente = 'AA123BB';
 \end{lstlisting}
 
-Lo esperado dentro de $T_B$:
+Dentro de $T_B$: ve el valor \emph{anterior} (porque el snapshot de B no incluye los cambios no confirmados de A). En esa versión, \texttt{xmin} corresponde a la transacción que la creó; \texttt{xmax} puede mostrar \texttt{tx\_a} (que está invalidándola), pero para B sigue siendo la versión visible.
 
-\begin{itemize}
-    \item $T_B$ ve el \emph{valor anterior} (el que estaba antes del
-    \texttt{UPDATE} de A), porque el snapshot de B no incluye los cambios
-    no confirmados de A.
-    \item En esa versión, \texttt{xmin} corresponde a la transacción que
-    creó la tupla original; \texttt{xmax} puede mostrar \texttt{tx\_a}
-    (la transacción que está invalidando esa versión), pero para B sigue
-    siendo la versión visible porque $T_A$ todavía no confirmó.
-\end{itemize}
+Aquí está la observación pedida: $T_A$ y $T_B$ ven valores distintos para la misma fila, simultáneamente y sin que ninguna espere.
 
-Acá está la observación pedida por el enunciado: \textbf{$T_A$ y $T_B$ ven
-valores distintos para la misma fila, simultáneamente y sin que ninguna
-espere}.
-
-\subsubsection*{Cierre y segunda lectura}
-
-En Sesión A:
+\textit{Cierre y segunda lectura:}
 
 \begin{lstlisting}
+-- Sesion A
 COMMIT;
-\end{lstlisting}
 
-En Sesión B (que sigue en su transacción \texttt{READ COMMITTED}):
-
-\begin{lstlisting}
+-- Sesion B (sigue en su transaccion READ COMMITTED)
 SELECT patente, saldo_actual, xmin, xmax
 FROM vehiculo
 WHERE patente = 'AA123BB';
@@ -1007,71 +921,75 @@ WHERE patente = 'AA123BB';
 COMMIT;
 \end{lstlisting}
 
-En \texttt{READ COMMITTED}, esta segunda lectura de B toma un snapshot
-nuevo y ya ve el valor confirmado por A.
+En \texttt{READ COMMITTED}, esta segunda lectura de B toma un snapshot nuevo y ya ve el valor confirmado por A.
 
-\begin{nota}
-Si en lugar de \texttt{READ COMMITTED} la sesión B usara \texttt{REPEATABLE
-READ} o \texttt{SERIALIZABLE}, su snapshot quedaría fijado al primer
-\texttt{SELECT}: la segunda lectura mostraría todavía el valor anterior.
-Si B intentara modificar la misma fila vería el error
-\emph{``could not serialize access due to concurrent update''}.
-\end{nota}
-
-\subsection{Interpretación de \texttt{xmin}/\texttt{xmax}}
+\textit{Interpretación de \texttt{xmin}/\texttt{xmax}:}
 
 \begin{itemize}
-    \item Una versión \emph{viva} tiene \texttt{xmax = 0}.
-    \item Un \texttt{UPDATE} produce dos versiones:
-    \begin{itemize}
-        \item versión vieja: \texttt{xmax = XID del UPDATE}; deja de ser
-        visible para snapshots que comienzan después del commit del update.
-        \item versión nueva: \texttt{xmin = XID del UPDATE}, \texttt{xmax = 0}.
-    \end{itemize}
-    \item Un \texttt{DELETE} marca la fila con \texttt{xmax = XID del DELETE}
-    sin crear nueva versión.
-    \item Las versiones muertas se eliminan más tarde con \texttt{VACUUM}
-    (o el \texttt{autovacuum}).
+    \item Una versión viva tiene \texttt{xmax = 0}.
+    \item Un \texttt{UPDATE} produce dos versiones: la vieja queda con \texttt{xmax = XID del UPDATE}; la nueva con \texttt{xmin = XID del UPDATE}, \texttt{xmax = 0}.
+    \item Un \texttt{DELETE} marca la fila con \texttt{xmax = XID del DELETE} sin crear nueva versión.
+    \item Las versiones muertas las elimina \texttt{VACUUM} (o \texttt{autovacuum}).
 \end{itemize}
 
-\subsection{Restaurar el dato (opcional)}
+\bloquePorque
+
+\begin{itemize}
+    \item MVCC permite \emph{lecturas sin locks}: B no tiene que esperar a A para leer porque cada transacción ve la última versión visible para su snapshot, no la última versión absoluta.
+    \item El precio es espacio: las versiones muertas se acumulan hasta que el \texttt{autovacuum} las recoge; en cargas con muchos \texttt{UPDATE} esto puede generar \emph{bloat}.
+    \item Si B intenta modificar la misma fila que A está modificando, igual aparece un lock: el lock exclusivo solo aplica a escrituras, las lecturas siempre van por MVCC.
+    \item En \texttt{REPEATABLE READ}/\texttt{SERIALIZABLE}, el snapshot se fija al primer \texttt{SELECT} de la transacción y se mantiene; un intento de modificar una fila ya modificada por otra transacción confirmada produce el error \emph{``could not serialize access due to concurrent update''}.
+\end{itemize}
+
+\bloqueMySQL
+
+InnoDB \emph{también} implementa MVCC, pero \textbf{no expone columnas \texttt{xmin}/\texttt{xmax}} en las tuplas: ambas viven en el undo log interno y no son consultables desde SQL. Lo que sí se puede observar es el comportamiento equivalente y algunos metadatos sobre las transacciones activas:
 
 \begin{lstlisting}
-UPDATE vehiculo
-SET saldo_actual = saldo_actual - 100
-WHERE patente = 'AA123BB';
+-- 1) Reproducir el escenario de dos sesiones viendo valores distintos
+-- (default de InnoDB es REPEATABLE READ; con READ COMMITTED para emular pg):
+
+-- Sesion A
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+START TRANSACTION;
+SELECT patente, saldo_actual FROM vehiculo WHERE patente='AA123BB';
+UPDATE vehiculo SET saldo_actual = saldo_actual + 100 WHERE patente='AA123BB';
+-- no commit todavia
+
+-- Sesion B (en paralelo)
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+START TRANSACTION;
+SELECT patente, saldo_actual FROM vehiculo WHERE patente='AA123BB';
+-- B ve el valor previo: MVCC le sirve la version anterior desde undo log
+
+-- 2) Inspeccionar el lado interno: que transacciones estan vivas y que estan haciendo
+SELECT trx_id, trx_state, trx_started, trx_isolation_level, trx_query
+FROM information_schema.INNODB_TRX;
+
+-- 3) Ver locks tomados (MySQL 8+):
+SELECT * FROM performance_schema.data_locks;
 \end{lstlisting}
 
+\textit{Diferencias relevantes con PostgreSQL:}
+
+\begin{itemize}
+    \item PostgreSQL guarda las versiones \emph{en la tabla} (cada fila ocupa lugar hasta que \texttt{VACUUM} la limpia); InnoDB guarda las versiones \emph{en el undo log} de tablespace separado.
+    \item \texttt{xmin}/\texttt{xmax} son columnas pseudo-públicas en PostgreSQL; en InnoDB el equivalente (\texttt{DB\_TRX\_ID}, \texttt{DB\_ROLL\_PTR}) no se puede consultar desde SQL.
+    \item En InnoDB no hay \emph{bloat}: las versiones muertas se reciclan automáticamente al cerrarse las transacciones que las pudieran necesitar. Por eso InnoDB no necesita un \texttt{VACUUM} explícito (lo hace el \emph{purge thread}).
+\end{itemize}
+
 % =====================================================
-\section{Conclusiones}
+\section*{Conclusiones}
+\addcontentsline{toc}{section}{Conclusiones}
 % =====================================================
 
-El práctico recorre los dos planos en los que se piensa la concurrencia
-de transacciones:
+El práctico recorre los dos planos en los que se piensa la concurrencia de transacciones:
 
 \begin{enumerate}
-    \item \textbf{Plano teórico} (Ejercicios 1--3): cómo se verifica que
-    un schedule es ``equivalente a una ejecución serial'' aunque haya
-    intercalado real. La herramienta es el grafo de precedencia (test de
-    serializabilidad por conflicto), y los dos protocolos que garantizan
-    schedules serializables son el bloqueo de dos fases y la ordenación
-    por marcas temporales.
-    \item \textbf{Plano práctico} (Ejercicios 4--8): cómo se materializan
-    estos conceptos en motores reales. \texttt{ROLLBACK} aplica
-    atomicidad. Los \emph{niveles de aislamiento} permiten relajar la
-    serializabilidad estricta para ganar concurrencia, asumiendo
-    determinados fenómenos (lectura sucia, no repetible, phantom). Las
-    \emph{constraints diferidas} permiten transacciones con
-    inconsistencias intermedias que cierran bien al commit. Y el
-    \emph{MVCC} de PostgreSQL muestra cómo distintos snapshots permiten
-    a varias transacciones ver versiones distintas de la misma fila sin
-    bloquearse entre sí.
+    \item \textbf{Plano teórico} (Ejercicios 1--3): cómo se verifica que un schedule es ``equivalente a una ejecución serial'' aunque haya intercalado real. La herramienta es el grafo de precedencia (test de serializabilidad por conflicto), y los dos protocolos que garantizan schedules serializables son el bloqueo de dos fases y la ordenación por marcas temporales.
+    \item \textbf{Plano práctico} (Ejercicios 4--8): cómo se materializan estos conceptos en motores reales. \texttt{ROLLBACK} aplica atomicidad. Los niveles de aislamiento permiten relajar la serializabilidad estricta para ganar concurrencia, asumiendo determinadas anomalías. Las constraints diferidas permiten transacciones con inconsistencias intermedias. El MVCC de PostgreSQL muestra cómo distintos snapshots permiten a varias transacciones ver versiones distintas de la misma fila sin bloquearse.
 \end{enumerate}
 
-La idea común detrás del práctico es: \emph{las transacciones aíslan al
-programador del caos de la concurrencia, pero ese aislamiento tiene
-costos}. Los protocolos y los niveles de aislamiento son los manijos que
-el sistema ofrece para regular ese trade-off entre consistencia y
-rendimiento.
+La idea común detrás del práctico es: \emph{las transacciones aíslan al programador del caos de la concurrencia, pero ese aislamiento tiene costos}. Los protocolos y los niveles de aislamiento son los manijos que el sistema ofrece para regular ese trade-off entre consistencia y rendimiento. Una nota cruzada que aparece en varios ejercicios: \textbf{InnoDB no expone los mecanismos teóricos directamente}: no permite 2PL puro (es siempre estricto), no usa marcas temporales (usa 2PL + detección de deadlocks), no soporta FKs deferibles (las chequea inmediatamente) y oculta \texttt{xmin}/\texttt{xmax} en el undo log. Cuando la consigna pide reproducir conceptos teóricos en MySQL, en muchos casos hay que conformarse con observar el \emph{efecto} sin acceso directo al mecanismo.
 
 \end{document}

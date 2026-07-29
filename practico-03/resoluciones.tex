@@ -54,7 +54,12 @@
         SECURITY,INVOKER,DEFINER,ROUTINE,PROFILE,
         BIGSERIAL,SERIAL,IDENTITY,GENERATED,ALWAYS,
         DBMS\_OUTPUT,PUT\_LINE,RAISE\_APPLICATION\_ERROR,SYSDATE,
-        SYSTEM,SYSDBA,DEFAULT,TEMPORARY},
+        SYSTEM,SYSDBA,DEFAULT,TEMPORARY,CURSOR,FETCH,
+        OPEN,CLOSE,LEAVE,CONTINUE,HANDLER,FOUND,WHILE,
+        CALL,VALUES,DUPLICATE,KEY,MODIFY,COLUMN,ROUND,
+        COALESCE,NVL,IFNULL,UPPER,TRIM,BTRIM,NOW,CURRENT\_TIMESTAMP,
+        COUNT,SUM,GROUP,BY,HAVING,ORDER,JOIN,LEFT,
+        PERFORM,RETURNING,INTO},
     sensitive=false,
     morecomment=[l]{--},
     morestring=[b]'
@@ -88,6 +93,15 @@
 
 % --- Hipervínculos ---
 \usepackage[hidelinks,bookmarks=true]{hyperref}
+
+% --- Comandos auxiliares (mismos que en Prácticos 1 y 2) ---
+\newcommand{\itemcabecera}[1]{\noindent\textbf{#1}\par\medskip}
+\newcommand{\bloqueConsigna}{\itemcabecera{Consigna}}
+\newcommand{\bloqueIdea}{\itemcabecera{Idea}}
+\newcommand{\bloqueSolucion}{\itemcabecera{Soluci\'on}}
+\newcommand{\bloquePorque}{\itemcabecera{Por qu\'e funciona}}
+\newcommand{\bloqueMySQL}{\itemcabecera{En MySQL 8+}}
+\newcommand{\bloquePrueba}{\itemcabecera{Prueba}}
 
 \title{Trabajo Práctico N.\textsuperscript{o} 3:
        Procedimientos Almacenados y Triggers\\[4pt]
@@ -132,69 +146,36 @@
 \section{Introducción}
 % =====================================================
 
-El Práctico 3 introduce dos mecanismos centrales del lado servidor:
-\textbf{procedimientos y funciones almacenadas} y \textbf{triggers}.
-Ambos permiten desplazar lógica de negocio desde la aplicación hasta el
-motor de base de datos, garantizando reglas de integridad y de
-auditoría que se cumplen \emph{siempre}, sin depender del cliente que
-ejecute la operación.
+El Práctico 3 introduce dos mecanismos centrales del lado servidor: \textbf{procedimientos y funciones almacenadas} y \textbf{triggers}. Ambos permiten desplazar lógica de negocio desde la aplicación hasta el motor, garantizando reglas de integridad y de auditoría que se cumplen \emph{siempre}, sin depender del cliente que ejecute la operación. Los ejercicios reutilizan las bases del Práctico 1 (incisos 1.a y 1.b) y los usuarios definidos en el Práctico 2.
 
-Los ejercicios reutilizan las bases de datos del Práctico 1 (inciso 1.a
-de facturación e inciso 1.b de estacionamiento) y, en el Ejercicio 4,
-los usuarios definidos en el Práctico 2. Cada inciso indica qué motor
-debe usarse:
-
-\begin{itemize}
-    \item Ejercicio 1: MySQL 8+ y PostgreSQL 14+.
-    \item Ejercicio 2: PostgreSQL 14+ exclusivamente.
-    \item Ejercicio 3: Oracle XE 10/11.
-    \item Ejercicio 4: MySQL 8+ con el usuario \texttt{vendedor2}.
-    \item Ejercicio 5: el motor en el que originalmente se creó cada
-    base (MySQL/PostgreSQL para facturación, MySQL/Oracle para
-    estacionamiento).
-\end{itemize}
+Cada ejercicio sigue siempre la misma estructura: \textbf{Consigna} (texto literal del PDF), \textbf{Idea} (lectura natural y concepto detrás), \textbf{Solución} (SQL en el motor que pide el enunciado), \textbf{Por qué funciona} (lógica paso a paso) y \textbf{En MySQL 8+} (equivalente portable a MySQL cuando el ejercicio pide otro motor). Cuando aplica, se agrega un bloque \textbf{Prueba} con sentencias de invocación.
 
 \begin{nota}
-\textbf{Convenciones.} Los nombres de bases siguen los del Práctico 1:
-\texttt{practico1a\_mysql}, \texttt{practico1a} (esquema en
-PostgreSQL) y \texttt{practico1b\_mysql}. En MySQL los procedimientos
-se rodean con \texttt{DELIMITER \$\$\dots\$\$ DELIMITER ;} para que el
-cliente no corte la sentencia en cada \texttt{;} interno.
+\textbf{Convenciones.} Los nombres de bases siguen los del Práctico 1: \texttt{practico1a\_mysql}, \texttt{practico1a} (esquema en PostgreSQL) y \texttt{practico1b\_mysql}. En MySQL, los procedimientos y triggers se rodean con \texttt{DELIMITER \$\$\dots\$\$ DELIMITER ;} para que el cliente no corte la sentencia en cada \texttt{;} interno. Variables locales con prefijo \texttt{v\_}; parámetros con prefijo \texttt{p\_}.
 \end{nota}
 
 % =====================================================
 \section{Ejercicio 1: Cantidad máxima de ítems por factura}
 % =====================================================
 
-\paragraph{Enunciado.} Sobre la base de facturación del Práctico 1.a,
-agregar a \texttt{factura} el campo \texttt{cantidad\_maxima\_items} y
-garantizar que ninguna factura supere ese máximo.
+\bloqueConsigna
 
-\subsection*{Estrategia}
+Teniendo en cuenta el ejercicio 1 a) de la práctica Nro 1 (base de datos de facturación), agregue a la tabla factura el campo cantidad máxima de ítems permitidos. Controlar que la base de datos no acepte que una factura tenga más ítems que la cantidad de ítems permitidos por esta (Modifique la estructura de la tabla para que soporte la información de cuantos ítem puede tener cada factura).
 
-La consigna combina un cambio de estructura con una regla de
-negocio que no se puede expresar como un \texttt{CHECK} declarativo
-porque depende de \emph{otra tabla}. Por eso se resuelve con tres
-elementos:
+\textbf{Nota:} Resolver utilizando los motores MySQL y PostgreSQL.
 
-\begin{enumerate}
-    \item Un \texttt{ALTER TABLE} que agrega la columna y un
-    \texttt{CHECK} sobre su rango.
-    \item Un trigger \texttt{BEFORE INSERT} (y \texttt{BEFORE UPDATE}
-    cuando un ítem se reasigna a otra factura) sobre
-    \texttt{item\_factura}, que cuenta los ítems existentes y aborta
-    si la inserción supera el límite.
-    \item Un trigger \texttt{BEFORE UPDATE} sobre \texttt{factura} que
-    impide bajar \texttt{cantidad\_maxima\_items} por debajo de los
-    ítems ya cargados.
-\end{enumerate}
+\bloqueIdea
 
-\subsection{MySQL 8+}
+La consigna combina un cambio de estructura con una regla de negocio que \emph{no} se puede expresar como un \texttt{CHECK} declarativo porque depende de otra tabla (la cantidad actual de filas en \texttt{item\_factura}). Se resuelve con tres elementos: \texttt{ALTER TABLE} para agregar la columna, un trigger \texttt{BEFORE INSERT}/\texttt{UPDATE} sobre \texttt{item\_factura} que cuenta ítems y aborta si supera el máximo, y un trigger \texttt{BEFORE UPDATE} sobre \texttt{factura} que impide bajar el límite por debajo de los ítems ya cargados.
+
+\bloqueSolucion
+
+\textit{MySQL 8+:}
 
 \begin{lstlisting}
 USE practico1a_mysql;
 
--- 1) Agregar la columna con un default razonable y validacion de rango.
+-- 1) Agregar la columna con default razonable y CHECK de rango.
 ALTER TABLE factura
     ADD COLUMN cantidad_maxima_items INT NOT NULL DEFAULT 10,
     ADD CONSTRAINT ck_factura_cantidad_maxima_items
@@ -225,8 +206,7 @@ BEGIN
 END$$
 DELIMITER ;
 
--- 3) Trigger BEFORE UPDATE en item_factura: solo valida el cambio de
---    factura destino (mover un item de una factura a otra).
+-- 3) Trigger BEFORE UPDATE en item_factura: solo valida cambios de factura destino.
 DROP TRIGGER IF EXISTS bu_item_factura_control_max_items;
 DELIMITER $$
 CREATE TRIGGER bu_item_factura_control_max_items
@@ -253,8 +233,8 @@ BEGIN
 END$$
 DELIMITER ;
 
--- 4) Trigger BEFORE UPDATE en factura: impide bajar el maximo por
---    debajo de los items ya cargados.
+-- 4) Trigger BEFORE UPDATE en factura: impide bajar el maximo
+--    por debajo de los items ya cargados.
 DROP TRIGGER IF EXISTS bu_factura_control_max_items;
 DELIMITER $$
 CREATE TRIGGER bu_factura_control_max_items
@@ -282,24 +262,11 @@ END$$
 DELIMITER ;
 \end{lstlisting}
 
-\paragraph{¿Por qué tres triggers?} El trigger de
-\texttt{INSERT} cubre la altas; el de \texttt{UPDATE} sobre
-\texttt{item\_factura} sólo se activa cuando el ítem cambia de
-factura, evitando trabajo innecesario en updates de
-\texttt{cantidad}/\texttt{precio}; y el trigger de \texttt{UPDATE}
-sobre \texttt{factura} cubre el caso simétrico, en el que el problema
-no es el ítem que entra sino el límite que baja.
-
-\subsection{PostgreSQL 14+}
-
-PostgreSQL separa la \emph{función} (que contiene la lógica) del
-\emph{trigger} (que la dispara). Una sola función cubre
-\texttt{INSERT} y \texttt{UPDATE} usando \texttt{TG\_OP}.
+\textit{PostgreSQL 14+:} este motor separa la \emph{función} (lógica) del \emph{trigger} (disparador). Una sola función cubre \texttt{INSERT} y \texttt{UPDATE} con \texttt{TG\_OP}.
 
 \begin{lstlisting}
 SET search_path TO practico1a;
 
--- 1) Agregar columna con default y CHECK.
 ALTER TABLE practico1a.factura
     ADD COLUMN cantidad_maxima_items INTEGER NOT NULL DEFAULT 10;
 
@@ -307,7 +274,7 @@ ALTER TABLE practico1a.factura
     ADD CONSTRAINT ck_factura_cantidad_maxima_items
     CHECK (cantidad_maxima_items > 0);
 
--- 2) Funcion + trigger de control sobre item_factura.
+-- Funcion + trigger sobre item_factura
 DROP TRIGGER IF EXISTS biu_item_factura_control_max_items
     ON practico1a.item_factura;
 DROP FUNCTION IF EXISTS practico1a.fn_control_max_items_item_factura();
@@ -320,7 +287,6 @@ DECLARE
     v_max INTEGER;
     v_actual INTEGER;
 BEGIN
-    -- En UPDATE de la misma factura no cambia la cantidad de items.
     IF TG_OP = 'UPDATE' AND NEW.nro_factura = OLD.nro_factura THEN
         RETURN NEW;
     END IF;
@@ -349,7 +315,7 @@ BEFORE INSERT OR UPDATE ON practico1a.item_factura
 FOR EACH ROW
 EXECUTE FUNCTION practico1a.fn_control_max_items_item_factura();
 
--- 3) Funcion + trigger de control sobre factura.cantidad_maxima_items.
+-- Funcion + trigger sobre factura.cantidad_maxima_items
 DROP TRIGGER IF EXISTS bu_factura_control_max_items
     ON practico1a.factura;
 DROP FUNCTION IF EXISTS practico1a.fn_control_update_max_items_factura();
@@ -387,19 +353,22 @@ FOR EACH ROW
 EXECUTE FUNCTION practico1a.fn_control_update_max_items_factura();
 \end{lstlisting}
 
-\paragraph{Detalles a destacar.}
+\bloquePorque
 
 \begin{itemize}
-    \item En PostgreSQL se usa \texttt{FOR UPDATE} sobre la fila de
-    \texttt{factura} para evitar condiciones de carrera bajo
-    concurrencia: si dos sesiones intentan insertar el último ítem al
-    mismo tiempo, una espera a que la otra confirme.
-    \item El trigger \texttt{BEFORE UPDATE OF cantidad\_maxima\_items}
-    sólo dispara cuando esa columna cambia, lo que es más eficiente
-    que disparar en cualquier \texttt{UPDATE}.
+    \item \textbf{Tres triggers}: el de \texttt{INSERT} cubre las altas; el de \texttt{UPDATE} sobre \texttt{item\_factura} solo actúa cuando el ítem se reasigna a otra factura (evita trabajo en updates inocuos de cantidad/precio); y el de \texttt{UPDATE} sobre \texttt{factura} cubre el caso simétrico, en el que el problema no es el ítem que entra sino el límite que baja.
+    \item Para \emph{abortar} la operación: en MySQL se usa \texttt{SIGNAL SQLSTATE '45000'} con un \texttt{MESSAGE\_TEXT}; en PostgreSQL se usa \texttt{RAISE EXCEPTION}. Ambos cancelan la transacción del cliente.
+    \item En PostgreSQL, el \texttt{SELECT ... FOR UPDATE} sobre la fila de \texttt{factura} bloquea la fila para evitar condiciones de carrera: si dos sesiones intentan insertar el último ítem al mismo tiempo, una espera a que la otra confirme.
+    \item \texttt{BEFORE UPDATE OF cantidad\_maxima\_items} (PostgreSQL) dispara solo cuando esa columna cambia, lo que es más eficiente que disparar en cualquier \texttt{UPDATE}.
 \end{itemize}
 
-\subsection*{Prueba (válida para ambos motores)}
+\bloqueMySQL
+
+La consigna ya pide MySQL: la sección \textit{Solución} contiene la versión MySQL 8+. Las únicas diferencias relevantes con PostgreSQL son sintácticas: \texttt{DECLARE} de variables dentro del cuerpo del trigger, \texttt{SIGNAL SQLSTATE '45000'} en vez de \texttt{RAISE EXCEPTION}, y la imposibilidad de combinar varios eventos en un solo trigger (en MySQL hay un trigger por evento; en PostgreSQL un solo \texttt{BEFORE INSERT OR UPDATE} cubre dos eventos).
+
+\bloquePrueba
+
+Las pruebas son válidas para ambos motores (cambian solo los nombres de esquema).
 
 \begin{lstlisting}
 -- Suponiendo que la factura 1001 ya tiene 2 items cargados.
@@ -420,19 +389,27 @@ UPDATE factura SET cantidad_maxima_items = 5 WHERE nro_factura = 1001;
 \section{Ejercicio 2: Cotización máxima por banco (PostgreSQL)}
 % =====================================================
 
-\paragraph{Enunciado.} Crear las tablas \texttt{Banco} y
-\texttt{Cotizacion}, e implementar una función que reciba un banco,
-calcule la cotización máxima \emph{sin usar} \texttt{MAX}, actualice
-\texttt{Banco.cotizacion\_maxima} y devuelva el resultado por un
-parámetro \texttt{OUT}.
+\bloqueConsigna
 
-\subsection*{Diseño}
+Utilizando el motor de base de datos PostgresSQL, cree las tablas:
 
-Como la consigna prohíbe \texttt{MAX}, la función recorre las
-cotizaciones del banco con un \texttt{FOR \dots\ LOOP} en PL/pgSQL y
-mantiene una variable acumuladora con el mayor valor visto hasta el
-momento. Si el banco no tiene cotizaciones cargadas o no existe, la
-función levanta una excepción explícita.
+\begin{quote}\ttfamily\small
+Banco (\underline{cod\_banco}, nombre, precio, cotizacion\_maxima)\\
+Cotización (\underline{cod\_cotizacion}, cod\_banco, cotización)\\
+\hspace*{1em} Cod\_banco: clave foránea a Banco
+\end{quote}
+
+Realizar una función que obtenga la máxima cotización para un banco dado y actualice el valor en la tabla Banco, la función debe retornar la cotización máxima en un parámetro de salida.
+
+\textbf{Nota:} No utilizar la función MAX!!!
+
+\bloqueIdea
+
+Es una función con \emph{parámetros mixtos} \texttt{IN} y \texttt{OUT}: recibe el código de banco, calcula la cotización máxima recorriendo manualmente las filas (sin usar \texttt{MAX}) y persiste el resultado en \texttt{Banco.cotizacion\_maxima}. El concepto clave es el patrón de cálculo iterativo con \texttt{FOR ... LOOP} en PL/pgSQL: una variable acumuladora se actualiza cuando aparece un valor mayor al visto hasta el momento.
+
+\bloqueSolucion
+
+\textit{Esquema y tablas:}
 
 \begin{lstlisting}
 CREATE SCHEMA IF NOT EXISTS practico3_ej2;
@@ -464,7 +441,7 @@ CREATE TABLE cotizacion (
 CREATE INDEX idx_cotizacion_cod_banco ON cotizacion(cod_banco);
 \end{lstlisting}
 
-\subsection*{Función con parámetros \texttt{IN}/\texttt{OUT}}
+\textit{Función con parámetros \texttt{IN}/\texttt{OUT}:}
 
 \begin{lstlisting}
 CREATE OR REPLACE FUNCTION practico3_ej2.fn_actualizar_cotizacion_maxima(
@@ -513,30 +490,99 @@ END;
 $$;
 \end{lstlisting}
 
-\paragraph{Análisis.}
+\bloquePorque
 
 \begin{itemize}
-    \item \textbf{Parámetros}: \texttt{p\_cod\_banco} entra como
-    \texttt{IN}, \texttt{p\_cotizacion\_maxima} sale como \texttt{OUT}.
-    PostgreSQL trata las funciones con \texttt{OUT} como devolviendo
-    una fila con esas columnas; por eso se invoca con
-    \texttt{SELECT * FROM fn\dots(\dots)}.
-    \item \textbf{Estructura iterativa}: el \texttt{FOR \dots\ LOOP}
-    avanza una fila por iteración. La variable
-    \texttt{p\_cotizacion\_maxima} se inicializa en \texttt{NULL} y
-    se actualiza con cada valor mayor.
-    \item \textbf{Manejo de errores}: dos \texttt{RAISE EXCEPTION}
-    distintos para los dos casos de borde (banco inexistente y banco
-    sin cotizaciones), con mensajes diferentes para que el cliente
-    pueda diferenciarlos.
-    \item \textbf{Concurrencia}: \texttt{PERFORM \dots\ FOR UPDATE}
-    bloquea la fila del banco para que dos invocaciones simultáneas
-    no se pisen al actualizar \texttt{cotizacion\_maxima}.
+    \item \textbf{Parámetros}: \texttt{p\_cod\_banco} entra como \texttt{IN}, \texttt{p\_cotizacion\_maxima} sale como \texttt{OUT}. PostgreSQL trata las funciones con \texttt{OUT} como devolviendo una fila con esas columnas; por eso se invoca con \texttt{SELECT * FROM fn(...)}.
+    \item \textbf{Iteración manual}: el \texttt{FOR v\_cot IN SELECT ... LOOP} avanza una fila por iteración. La variable \texttt{p\_cotizacion\_maxima} se inicializa en \texttt{NULL} y se actualiza con cada valor mayor. Así se respeta la restricción de no usar \texttt{MAX}.
+    \item \textbf{Manejo de errores}: dos \texttt{RAISE EXCEPTION} distintos (banco inexistente vs. banco sin cotizaciones) con mensajes diferentes para que el cliente pueda diferenciarlos.
+    \item \textbf{Concurrencia}: \texttt{PERFORM ... FOR UPDATE} bloquea la fila del banco; dos invocaciones simultáneas no se pisan al actualizar \texttt{cotizacion\_maxima}.
 \end{itemize}
 
-\subsection*{Datos de prueba y ejecución}
+\bloqueMySQL
+
+MySQL 8+ no permite parámetros \texttt{OUT} en \texttt{FUNCTION} (solo en \texttt{PROCEDURE}); la traducción idiomática es un \texttt{PROCEDURE} con \texttt{IN p\_cod\_banco} y \texttt{OUT p\_cotizacion\_maxima}. El recorrido iterativo se hace con un \texttt{CURSOR} y un \texttt{CONTINUE HANDLER FOR NOT FOUND}, que es el patrón estándar en MySQL para iterar sin agregaciones.
 
 \begin{lstlisting}
+USE practico3_ej2_mysql;  -- equivalente del schema practico3_ej2
+
+DROP TABLE IF EXISTS cotizacion;
+DROP TABLE IF EXISTS banco;
+
+CREATE TABLE banco (
+    cod_banco INT PRIMARY KEY,
+    nombre VARCHAR(80) NOT NULL,
+    precio DECIMAL(12,4) NOT NULL,
+    cotizacion_maxima DECIMAL(12,4) NULL,
+    CONSTRAINT ck_banco_precio CHECK (precio > 0)
+);
+
+CREATE TABLE cotizacion (
+    cod_cotizacion INT AUTO_INCREMENT PRIMARY KEY,
+    cod_banco INT NOT NULL,
+    cotizacion DECIMAL(12,4) NOT NULL,
+    CONSTRAINT ck_cotizacion_valor CHECK (cotizacion > 0),
+    CONSTRAINT fk_cotizacion_banco
+        FOREIGN KEY (cod_banco) REFERENCES banco(cod_banco)
+);
+
+DROP PROCEDURE IF EXISTS sp_actualizar_cotizacion_maxima;
+DELIMITER $$
+CREATE PROCEDURE sp_actualizar_cotizacion_maxima(
+    IN  p_cod_banco INT,
+    OUT p_cotizacion_maxima DECIMAL(12,4)
+)
+BEGIN
+    DECLARE v_cot   DECIMAL(12,4);
+    DECLARE v_done  INT DEFAULT FALSE;
+    DECLARE v_existe INT;
+
+    DECLARE cur_cot CURSOR FOR
+        SELECT cotizacion
+          FROM cotizacion
+         WHERE cod_banco = p_cod_banco;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = TRUE;
+
+    SELECT COUNT(*) INTO v_existe FROM banco WHERE cod_banco = p_cod_banco;
+    IF v_existe = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No existe banco con ese codigo';
+    END IF;
+
+    SET p_cotizacion_maxima = NULL;
+
+    OPEN cur_cot;
+    read_loop: LOOP
+        FETCH cur_cot INTO v_cot;
+        IF v_done THEN LEAVE read_loop; END IF;
+        IF p_cotizacion_maxima IS NULL OR v_cot > p_cotizacion_maxima THEN
+            SET p_cotizacion_maxima = v_cot;
+        END IF;
+    END LOOP;
+    CLOSE cur_cot;
+
+    IF p_cotizacion_maxima IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'El banco no tiene cotizaciones cargadas';
+    END IF;
+
+    UPDATE banco
+       SET cotizacion_maxima = p_cotizacion_maxima
+     WHERE cod_banco = p_cod_banco;
+END$$
+DELIMITER ;
+
+-- Invocacion
+CALL sp_actualizar_cotizacion_maxima(1, @max);
+SELECT @max AS cotizacion_maxima;
+\end{lstlisting}
+
+\textit{Qué cambia respecto de PostgreSQL:} (i) \texttt{FUNCTION} sin \texttt{OUT} en MySQL, se convierte a \texttt{PROCEDURE}; (ii) el \texttt{FOR ... LOOP} sobre un \texttt{SELECT} no existe directamente: se reemplaza por \texttt{CURSOR + CONTINUE HANDLER FOR NOT FOUND}; (iii) \texttt{RAISE EXCEPTION} se vuelve \texttt{SIGNAL SQLSTATE '45000' SET MESSAGE\_TEXT}.
+
+\bloquePrueba
+
+\begin{lstlisting}
+-- PostgreSQL
 SET search_path TO practico3_ej2;
 
 INSERT INTO banco (cod_banco, nombre, precio, cotizacion_maxima) VALUES
@@ -547,7 +593,7 @@ INSERT INTO cotizacion (cod_banco, cotizacion) VALUES
     (1, 1210.5000), (1, 1198.2000), (1, 1245.7500), (1, 1222.1000),
     (2,  960.0000), (2, 1001.3000), (2,  998.9000);
 
--- Llamado: la salida es 1245.7500 para el banco 1, 1001.3000 para el 2.
+-- Maximos esperados: 1245.7500 para el banco 1, 1001.3000 para el 2.
 SELECT * FROM practico3_ej2.fn_actualizar_cotizacion_maxima(1);
 SELECT * FROM practico3_ej2.fn_actualizar_cotizacion_maxima(2);
 
@@ -560,23 +606,34 @@ SELECT cod_banco, nombre, cotizacion_maxima
 \section{Ejercicio 3: Saldo de cuenta bancaria (Oracle)}
 % =====================================================
 
-\paragraph{Enunciado.} Crear las tablas \texttt{cuenta} y
-\texttt{movimiento} y dos procedimientos: (a) registrar un movimiento
-manteniendo el saldo y mostrarlo por pantalla, y (b) calcular el saldo
-de una cuenta a una fecha dada, mostrándolo por pantalla y
-devolviéndolo por un parámetro de salida.
+\bloqueConsigna
 
-\subsection*{Esquema}
+Utilizando el motor de base de datos Oracle, cree las tablas:
 
-El saldo de cada cuenta se mantiene \emph{denormalizado} en
-\texttt{cuenta.saldo} para evitar recalcularlo a partir de toda la
-historia en cada consulta. La consistencia entre ambos se mantiene
-mediante el procedimiento de inserción.
+\begin{quote}\ttfamily\small
+cuenta (\underline{nro\_cuenta}, saldo)\\
+movimiento (\underline{nro\_movimiento}, nro\_cuenta, fecha, debe, haber)\\
+\hspace*{1em} nro\_cuenta: Clave foránea a cuenta
+\end{quote}
+
+Luego, cree los siguientes procedimientos almacenados:
+
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item Que inserte un movimiento y mantenga consistente el saldo en la tabla cuenta. El procedimiento debe tomar como parámetro el nro de cuenta, el debe y el haber. Al final del procedimiento imprima por pantalla el número de cuenta y el saldo actual.
+    \item Que calcule el saldo de una cuenta a una determinada fecha. El procedimiento, además de mostrar por pantalla el saldo, lo debe retornar en un parámetro.
+\end{enumerate}
+
+\bloqueIdea
+
+Dos procedimientos PL/SQL con patrones clásicos: el primero es un \emph{procedimiento transaccional} con validaciones, \texttt{SELECT ... FOR UPDATE} para concurrencia, \texttt{INSERT} + \texttt{UPDATE} en la misma transacción y salida con \texttt{DBMS\_OUTPUT.PUT\_LINE}. El segundo es un \emph{cálculo retrospectivo}: parte del saldo actual y le resta el efecto neto de los movimientos posteriores a la fecha dada, retornándolo por un parámetro \texttt{OUT}. El saldo se mantiene denormalizado en \texttt{cuenta.saldo} para no recalcularlo desde el principio cada vez.
+
+\bloqueSolucion
+
+\textit{Esquema:}
 
 \begin{lstlisting}
 SET SERVEROUTPUT ON;
 
--- Tablas
 CREATE TABLE cuenta (
     nro_cuenta NUMBER(10) CONSTRAINT pk_cuenta PRIMARY KEY,
     saldo NUMBER(14,2) DEFAULT 0 NOT NULL
@@ -596,7 +653,7 @@ CREATE TABLE movimiento (
         CHECK ((debe > 0 AND haber = 0) OR (haber > 0 AND debe = 0))
 );
 
--- En Oracle 10g/11g no hay IDENTITY: secuencia + trigger.
+-- Oracle 10g/11g no tiene IDENTITY: secuencia + trigger.
 CREATE SEQUENCE seq_movimiento
     START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
@@ -615,7 +672,7 @@ END;
 /
 \end{lstlisting}
 
-\subsection{Inciso a) Procedimiento que inserta movimiento y mantiene saldo}
+\textit{Inciso a) Procedimiento que inserta movimiento y mantiene saldo:}
 
 \begin{lstlisting}
 CREATE OR REPLACE PROCEDURE sp_registrar_movimiento (
@@ -628,7 +685,6 @@ IS
     v_debe  NUMBER(14,2) := NVL(p_debe, 0);
     v_haber NUMBER(14,2) := NVL(p_haber, 0);
 BEGIN
-    -- Validaciones de los parametros.
     IF v_debe < 0 OR v_haber < 0 THEN
         RAISE_APPLICATION_ERROR(-20001,
             'Debe/Haber no pueden ser negativos');
@@ -640,7 +696,7 @@ BEGIN
             'La operacion debe tener solo DEBE o solo HABER');
     END IF;
 
-    -- Bloqueo de la cuenta para mantener consistencia bajo concurrencia.
+    -- Bloqueo de la cuenta para consistencia bajo concurrencia.
     SELECT c.saldo INTO v_saldo_actual
       FROM cuenta c
      WHERE c.nro_cuenta = p_nro_cuenta
@@ -666,29 +722,7 @@ END;
 /
 \end{lstlisting}
 
-\paragraph{Lógica del procedimiento.}
-
-\begin{enumerate}
-    \item Recibe los parámetros \texttt{IN}: \texttt{p\_nro\_cuenta},
-    \texttt{p\_debe}, \texttt{p\_haber}.
-    \item Reemplaza eventuales \texttt{NULL} por \texttt{0} con
-    \texttt{NVL} y valida que la operación sea \emph{sólo} debe o
-    \emph{sólo} haber.
-    \item Bloquea la fila de la cuenta con \texttt{SELECT \dots\ FOR
-    UPDATE} para evitar condiciones de carrera entre dos
-    movimientos concurrentes sobre la misma cuenta.
-    \item Inserta el movimiento (la columna \texttt{nro\_movimiento}
-    se completa automáticamente con el trigger
-    \texttt{bi\_movimiento}).
-    \item Actualiza el saldo en la misma transacción y captura el
-    nuevo valor con \texttt{RETURNING}.
-    \item Imprime el resultado con \texttt{DBMS\_OUTPUT.PUT\_LINE}.
-    \item En caso de cuenta inexistente, atrapa
-    \texttt{NO\_DATA\_FOUND} y emite un error de aplicación
-    diferenciado.
-\end{enumerate}
-
-\subsection{Inciso b) Saldo a una fecha dada}
+\textit{Inciso b) Saldo a una fecha dada:}
 
 \begin{lstlisting}
 CREATE OR REPLACE PROCEDURE sp_saldo_a_fecha (
@@ -704,7 +738,7 @@ BEGIN
       FROM cuenta c
      WHERE c.nro_cuenta = p_nro_cuenta;
 
-    -- Suma del impacto de los movimientos POSTERIORES a la fecha.
+    -- Impacto neto de los movimientos POSTERIORES a p_fecha.
     SELECT NVL(SUM(m.debe - m.haber), 0)
       INTO v_delta_posterior
       FROM movimiento m
@@ -726,16 +760,136 @@ END;
 /
 \end{lstlisting}
 
-\paragraph{Idea del cálculo.} Se parte del saldo actual y se le resta
-el efecto neto de los movimientos cuya fecha sea estrictamente mayor
-a \texttt{p\_fecha}: así se obtiene cuánto valía la cuenta al
-\emph{cierre} de \texttt{p\_fecha}. La alternativa --- sumar todos los
-movimientos hasta esa fecha desde el comienzo --- es equivalente pero
-más cara cuando hay muchos movimientos antiguos.
+\bloquePorque
 
-\subsection*{Prueba}
+\begin{itemize}
+    \item En el inciso a), \texttt{NVL(p\_debe, 0)} normaliza nulos a cero; las dos validaciones de negocio se traducen en \texttt{RAISE\_APPLICATION\_ERROR} con códigos distintos (\texttt{-20001}, \texttt{-20002}) para que el cliente pueda diferenciarlas.
+    \item \texttt{SELECT ... FOR UPDATE} sobre la cuenta evita condiciones de carrera bajo concurrencia: dos movimientos sobre la misma cuenta se serializan.
+    \item \texttt{RETURNING c.saldo INTO v\_saldo\_actual} captura el saldo nuevo justo después del \texttt{UPDATE}, ahorrando una consulta extra. \texttt{DBMS\_OUTPUT.PUT\_LINE} es el mecanismo de Oracle para escribir a la consola de sqlplus (requiere \texttt{SET SERVEROUTPUT ON}).
+    \item En el inciso b), la idea es: \texttt{saldo\_a\_fecha = saldo\_actual - (suma de debe-haber de los movimientos posteriores)}. Es equivalente a sumar desde el principio hasta \texttt{p\_fecha}, pero más barato cuando hay mucha historia antigua.
+    \item El bloque \texttt{EXCEPTION WHEN NO\_DATA\_FOUND} atrapa el caso de cuenta inexistente: \texttt{SELECT INTO} lanza esa excepción automáticamente si no encuentra filas.
+\end{itemize}
+
+\bloqueMySQL
+
+MySQL 8+ traduce ambos procedimientos directo, con tres diferencias: (i) no existe \texttt{\%TYPE}, hay que escribir el tipo concreto; (ii) no existe \texttt{DBMS\_OUTPUT}, la salida se hace con \texttt{SELECT}; (iii) no existe \texttt{RAISE\_APPLICATION\_ERROR}, se usa \texttt{SIGNAL SQLSTATE '45000'} con \texttt{MESSAGE\_TEXT}. \texttt{RETURNING} tampoco existe en MySQL: hay que hacer un \texttt{SELECT} extra para leer el saldo después del \texttt{UPDATE}.
 
 \begin{lstlisting}
+USE practico3_ej3_mysql;
+
+CREATE TABLE cuenta (
+    nro_cuenta INT PRIMARY KEY,
+    saldo DECIMAL(14,2) NOT NULL DEFAULT 0
+);
+
+CREATE TABLE movimiento (
+    nro_movimiento INT AUTO_INCREMENT PRIMARY KEY,
+    nro_cuenta INT NOT NULL,
+    fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    debe  DECIMAL(14,2) NOT NULL DEFAULT 0,
+    haber DECIMAL(14,2) NOT NULL DEFAULT 0,
+    CONSTRAINT fk_movimiento_cuenta
+        FOREIGN KEY (nro_cuenta) REFERENCES cuenta(nro_cuenta),
+    CONSTRAINT ck_mov_montos CHECK (debe >= 0 AND haber >= 0),
+    CONSTRAINT ck_mov_operacion
+        CHECK ((debe > 0 AND haber = 0) OR (haber > 0 AND debe = 0))
+);
+
+-- Inciso a)
+DROP PROCEDURE IF EXISTS sp_registrar_movimiento;
+DELIMITER $$
+CREATE PROCEDURE sp_registrar_movimiento(
+    IN p_nro_cuenta INT,
+    IN p_debe       DECIMAL(14,2),
+    IN p_haber      DECIMAL(14,2)
+)
+BEGIN
+    DECLARE v_existe INT;
+    DECLARE v_saldo  DECIMAL(14,2);
+    DECLARE v_debe   DECIMAL(14,2) DEFAULT IFNULL(p_debe, 0);
+    DECLARE v_haber  DECIMAL(14,2) DEFAULT IFNULL(p_haber, 0);
+
+    IF v_debe < 0 OR v_haber < 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Debe/Haber no pueden ser negativos';
+    END IF;
+
+    IF NOT ((v_debe > 0 AND v_haber = 0)
+         OR (v_haber > 0 AND v_debe = 0)) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'La operacion debe tener solo DEBE o solo HABER';
+    END IF;
+
+    SELECT COUNT(*) INTO v_existe FROM cuenta WHERE nro_cuenta = p_nro_cuenta;
+    IF v_existe = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No existe la cuenta';
+    END IF;
+
+    -- Bloqueo de la cuenta (requiere transaccion explicita en InnoDB).
+    SELECT saldo INTO v_saldo
+      FROM cuenta
+     WHERE nro_cuenta = p_nro_cuenta
+     FOR UPDATE;
+
+    INSERT INTO movimiento (nro_cuenta, debe, haber)
+    VALUES (p_nro_cuenta, v_debe, v_haber);
+
+    UPDATE cuenta SET saldo = saldo + v_debe - v_haber
+     WHERE nro_cuenta = p_nro_cuenta;
+
+    -- Reemplazo de DBMS_OUTPUT: SELECT como salida visible para el cliente.
+    SELECT nro_cuenta, saldo
+      FROM cuenta
+     WHERE nro_cuenta = p_nro_cuenta;
+END$$
+DELIMITER ;
+
+-- Inciso b)
+DROP PROCEDURE IF EXISTS sp_saldo_a_fecha;
+DELIMITER $$
+CREATE PROCEDURE sp_saldo_a_fecha(
+    IN  p_nro_cuenta INT,
+    IN  p_fecha      DATETIME,
+    OUT p_saldo      DECIMAL(14,2)
+)
+BEGIN
+    DECLARE v_saldo_actual    DECIMAL(14,2);
+    DECLARE v_delta_posterior DECIMAL(14,2);
+    DECLARE v_existe          INT;
+
+    SELECT COUNT(*) INTO v_existe FROM cuenta WHERE nro_cuenta = p_nro_cuenta;
+    IF v_existe = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No existe la cuenta';
+    END IF;
+
+    SELECT saldo INTO v_saldo_actual FROM cuenta WHERE nro_cuenta = p_nro_cuenta;
+
+    SELECT IFNULL(SUM(debe - haber), 0) INTO v_delta_posterior
+      FROM movimiento
+     WHERE nro_cuenta = p_nro_cuenta
+       AND fecha > p_fecha;
+
+    SET p_saldo = v_saldo_actual - v_delta_posterior;
+
+    -- "Mostrar por pantalla" via SELECT.
+    SELECT p_nro_cuenta AS nro_cuenta, p_fecha AS fecha, p_saldo AS saldo;
+END$$
+DELIMITER ;
+
+-- Invocacion
+CALL sp_registrar_movimiento(1001, 1000, 0);
+CALL sp_saldo_a_fecha(1001, NOW(), @s);
+SELECT @s AS saldo_retornado;
+\end{lstlisting}
+
+\textit{Qué cambia respecto de Oracle:} (i) sin \texttt{\%TYPE} hay que repetir el tipo; (ii) la "salida por pantalla" se simula con \texttt{SELECT}, porque MySQL no tiene buffer de salida tipo \texttt{DBMS\_OUTPUT}; (iii) \texttt{RETURNING ... INTO} se reemplaza por un \texttt{SELECT} extra; (iv) errores con \texttt{SIGNAL SQLSTATE '45000'} en lugar de \texttt{RAISE\_APPLICATION\_ERROR}.
+
+\bloquePrueba
+
+\begin{lstlisting}
+-- Oracle
 SET SERVEROUTPUT ON;
 
 INSERT INTO cuenta (nro_cuenta, saldo) VALUES (1001, 0);
@@ -752,8 +906,7 @@ DECLARE
     v_saldo NUMBER;
 BEGIN
     sp_saldo_a_fecha(1001, SYSDATE, v_saldo);
-    DBMS_OUTPUT.PUT_LINE(
-        'Saldo retornado por OUT: ' ||
+    DBMS_OUTPUT.PUT_LINE('Saldo retornado por OUT: ' ||
         TO_CHAR(v_saldo, 'FM9999999990D00'));
 END;
 /
@@ -763,21 +916,22 @@ END;
 \section{Ejercicio 4: Detección de facturas inconsistentes (MySQL)}
 % =====================================================
 
-\paragraph{Enunciado.} Crear un procedimiento, en MySQL, que
-detecte facturas \emph{inconsistentes} (cuando la suma de
-\texttt{cantidad $\times$ precio} de sus ítems no coincide con
-\texttt{factura.monto}) y las almacene en una tabla. El procedimiento
-debe ser creado con el usuario \texttt{vendedor2} del Práctico 2 y
-ejecutarse con permisos del \emph{invocador}.
+\bloqueConsigna
 
-\subsection*{Preparación (como \texttt{root})}
+Utilizando el motor MySQL con la base de datos definida en el ejercicio 1a) de la Práctica 1 de Repaso de SQL (Base de datos de clientes y productos), y haciéndole las modificaciones que crea necesarias, cree un procedimiento que guarde información en una tabla con las facturas que no son consistentes (una factura no es consistente si la suma de sus ítems es diferente al monto total de la factura). Considerar:
 
-En el Práctico 2 (inciso 1.f) se le revocaron todos los privilegios a
-\texttt{vendedor2}. Antes de poder crear el procedimiento como
-\texttt{vendedor2}, hay que reotorgarle los permisos mínimos y, dado
-que el procedimiento usará \texttt{SQL SECURITY INVOKER}, también hay
-que dotar de los privilegios necesarios a \texttt{vendedor1} (el otro
-usuario que lo invocará).
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item El procedimiento debe ser creado con el usuario vendedor2 (creado en la práctica anterior) y el procedimiento debe ser creado para ejecutarse con los permisos del invocador.
+    \item Ejecute el procedimiento con los usuarios vendedor2 y vendedor1.
+\end{enumerate}
+
+\bloqueIdea
+
+Dos conceptos del lado servidor entran en juego: (1) un procedimiento que materializa en una tabla \texttt{facturas\_inconsistentes} todas las facturas cuyo \texttt{monto} difiere de la suma de \texttt{cantidad * precio} de sus ítems; (2) \texttt{SQL SECURITY INVOKER}, que hace que el procedimiento se ejecute con los permisos del invocador (no del creador). Eso obliga a configurar los \texttt{GRANT} necesarios para cada usuario que vaya a llamarlo, conectando el Práctico 3 con el DCL del Práctico 2.
+
+\bloqueSolucion
+
+\textit{Preparación (como \texttt{root}):} En el Práctico 2 (inciso 1.f) se le revocaron todos los privilegios a \texttt{vendedor2}; hay que reotorgarle los mínimos para crear el procedimiento, y como correrá con \texttt{INVOKER}, también hay que dotar a \texttt{vendedor1} de los privilegios que la rutina ejecuta.
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -796,8 +950,8 @@ CREATE TABLE IF NOT EXISTS facturas_inconsistentes (
 GRANT CREATE ROUTINE ON practico1a_mysql.*
     TO 'vendedor2'@'localhost';
 
--- Como el procedimiento corre con SQL SECURITY INVOKER,
--- cada usuario que lo ejecute necesita estos permisos:
+-- El procedimiento corre con SQL SECURITY INVOKER, asi que cada usuario
+-- que lo ejecute necesita estos permisos:
 GRANT SELECT (nro_factura, monto)
    ON practico1a_mysql.factura
    TO 'vendedor1'@'localhost', 'vendedor2'@'localhost';
@@ -811,8 +965,7 @@ GRANT INSERT, UPDATE, SELECT
    TO 'vendedor1'@'localhost', 'vendedor2'@'localhost';
 \end{lstlisting}
 
-\subsection*{Creación del procedimiento (conectado como
-\texttt{vendedor2})}
+\textit{Creación del procedimiento (conectado como \texttt{vendedor2}):}
 
 \begin{lstlisting}
 -- $ mysql -u vendedor2 -p practico1a_mysql
@@ -849,16 +1002,14 @@ END$$
 DELIMITER ;
 \end{lstlisting}
 
-\paragraph{Por qué \texttt{SQL SECURITY INVOKER}.} Por defecto MySQL
-crea procedimientos con \texttt{SQL SECURITY DEFINER}, lo que hace que
-todas las ejecuciones se realicen con los permisos de quien lo creó.
-La consigna pide lo contrario: que el procedimiento corra con los
-permisos de quien lo invoca. Eso obliga a que \emph{cada} invocador
-posea los permisos que la rutina necesita; de ahí los \texttt{GRANT}
-de la sección anterior.
+\textit{Permiso de ejecución (como \texttt{root}):}
 
-\paragraph{Verificación del \texttt{DEFINER}.} Para confirmar que se
-creó como \texttt{vendedor2} y con \texttt{SQL SECURITY INVOKER}:
+\begin{lstlisting}
+GRANT EXECUTE ON PROCEDURE practico1a_mysql.sp_guardar_facturas_inconsistentes
+    TO 'vendedor1'@'localhost', 'vendedor2'@'localhost';
+\end{lstlisting}
+
+\textit{Verificación del \texttt{DEFINER}:}
 
 \begin{lstlisting}
 SHOW CREATE PROCEDURE sp_guardar_facturas_inconsistentes\G
@@ -867,57 +1018,65 @@ SHOW CREATE PROCEDURE sp_guardar_facturas_inconsistentes\G
 --   SQL SECURITY INVOKER
 \end{lstlisting}
 
-\subsection*{Permiso de ejecución (como \texttt{root})}
+\bloquePorque
+
+\begin{itemize}
+    \item Por defecto MySQL crea procedimientos con \texttt{SQL SECURITY DEFINER}: corren con los permisos de quien los creó. La consigna pide lo contrario (\texttt{INVOKER}), que obliga a que cada llamador tenga sus propios permisos. De ahí los \texttt{GRANT} sobre \texttt{factura}, \texttt{item\_factura} y la tabla destino para ambos vendedores.
+    \item El \texttt{LEFT JOIN} entre \texttt{factura} e \texttt{item\_factura} permite que aparezcan también facturas sin ítems (suma 0). \texttt{COALESCE} convierte los \texttt{NULL} de la suma vacía en 0 para que la comparación contra \texttt{monto} tenga sentido.
+    \item \texttt{HAVING ROUND(...) <> ROUND(f.monto, 2)} filtra después de la agregación. El \texttt{ROUND} a dos decimales evita falsos positivos por residuos de coma flotante.
+    \item \texttt{ON DUPLICATE KEY UPDATE} reemplaza el registro si la factura ya estaba marcada como inconsistente: re-ejecutar el procedimiento no falla por clave duplicada, simplemente refresca la lectura. \texttt{USER()} devuelve el usuario realmente conectado, así se distingue quién corrió el control.
+\end{itemize}
+
+\bloqueMySQL
+
+La consigna ya pide MySQL: la \textit{Solución} es la versión MySQL 8+. Vale anotar la portabilidad inversa: en PostgreSQL, el equivalente de \texttt{SQL SECURITY INVOKER}/\texttt{DEFINER} se llama \texttt{SECURITY INVOKER}/\texttt{SECURITY DEFINER} dentro del \texttt{CREATE FUNCTION/PROCEDURE}; en Oracle es \texttt{AUTHID CURRENT\_USER} (invoker) vs \texttt{AUTHID DEFINER} (default). El uso de \texttt{ON DUPLICATE KEY UPDATE} es propio de MySQL; en PostgreSQL se hace con \texttt{INSERT ... ON CONFLICT ... DO UPDATE}, y en Oracle con \texttt{MERGE INTO}.
+
+\bloquePrueba
 
 \begin{lstlisting}
-GRANT EXECUTE ON PROCEDURE practico1a_mysql.sp_guardar_facturas_inconsistentes
-    TO 'vendedor1'@'localhost', 'vendedor2'@'localhost';
-\end{lstlisting}
-
-\subsection*{Prueba con ambos usuarios}
-
-Para forzar una inconsistencia (sólo \texttt{root} suele tener
-\texttt{UPDATE} sobre \texttt{factura}):
-
-\begin{lstlisting}
+-- Forzar una inconsistencia (solo root suele tener UPDATE sobre factura):
 USE practico1a_mysql;
 UPDATE factura SET monto = monto + 100 WHERE nro_factura = 1001;
-\end{lstlisting}
 
-Luego, conectándose como cada usuario y ejecutando:
-
-\begin{lstlisting}
+-- Conectado como vendedor2:
 -- $ mysql -u vendedor2 -p practico1a_mysql
 CALL sp_guardar_facturas_inconsistentes();
 SELECT * FROM facturas_inconsistentes
  ORDER BY fecha_control DESC, nro_factura;
 
+-- Conectado como vendedor1:
 -- $ mysql -u vendedor1 -p practico1a_mysql
 CALL sp_guardar_facturas_inconsistentes();
 SELECT * FROM facturas_inconsistentes
  ORDER BY fecha_control DESC, nro_factura;
 \end{lstlisting}
 
-\paragraph{¿Por qué \texttt{ON DUPLICATE KEY UPDATE}?} Porque
-\texttt{nro\_factura} es \texttt{PRIMARY KEY} en
-\texttt{facturas\_inconsistentes}: si una factura ya estaba marcada
-como inconsistente y se vuelve a ejecutar el procedimiento, en lugar
-de fallar por clave duplicada se actualiza con la última lectura. La
-columna \texttt{usuario\_ejecucion} usa \texttt{USER()}, que en MySQL
-devuelve el usuario realmente conectado, lo que permite distinguir
-quién corrió el control.
-
 % =====================================================
 \section{Ejercicio 5: Triggers y autonumerado}
 % =====================================================
 
+\bloqueConsigna
+
+Cree triggers teniendo en cuenta las siguientes consideraciones:
+
+\begin{enumerate}[label=\alph*),leftmargin=*]
+    \item En la base de datos creada en el ejercicio 1a) de la Práctica 1) de Repaso de SQL, agregue un trigger para que antes de cada inserción de un producto se guarde la descripción en mayúsculas.
+    \item En la base de datos creada en el ejercicio 1a) de la Práctica 1) de Repaso de SQL, agregue un trigger, para que luego de cada modificación en la cantidad de un producto se guarde información de auditoria. Esta información debe quedar almacenada en la tabla auditoriaProducto (crearla antes de definir el trigger), la información a almacenar es cod\_producto, movimiento (diferencia de cantidades), fecha de realización de la actualización y el usuario que lo hizo. Con respecto al usuario que la realizó, debe ser el código de usuario del usuario logueado en la aplicación cliente de la base de datos. \textbf{Hint:} ver ejemplo Teórico.
+    \item Modifique la base de datos creada en el inciso b) del ejercicio 1 de la Práctica 1 (bases de datos de estacionamiento) considerando que \#parquimetro es auto numerado. ¿Cómo lo resolvería en Oracle? \textbf{Hint:} ver SEQUENCE.
+\end{enumerate}
+
+\textbf{Nota:} Resolver utilizando los motores que se utilizaron en la creación de las bases de datos.
+
+\bloqueIdea
+
+Tres usos distintos de trigger: (a) normalización antes de escribir (\texttt{BEFORE INSERT}); (b) auditoría después del cambio (\texttt{AFTER UPDATE}) usando una variable de sesión que provee el usuario de aplicación, ya que el motor no la conoce por sí mismo; (c) autonumerado, que en MySQL es directo con \texttt{AUTO\_INCREMENT}, pero en Oracle 10/11 XE requiere el patrón clásico de \texttt{SEQUENCE + TRIGGER BEFORE INSERT} (no hay \texttt{IDENTITY} hasta Oracle 12c).
+
+% -----------------------------------------------------
 \subsection{a) Mayúsculas antes de insertar un producto}
 
-Se trata de un trigger \texttt{BEFORE INSERT} que normaliza el dato
-antes de guardarlo, de modo que la auditoría posterior y las búsquedas
-queden uniformes.
+\bloqueSolucion
 
-\subsubsection*{MySQL 8+ (\texttt{practico1a\_mysql})}
+\textit{MySQL 8+ (\texttt{practico1a\_mysql}):}
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -933,7 +1092,7 @@ END$$
 DELIMITER ;
 \end{lstlisting}
 
-\subsubsection*{PostgreSQL 14+ (\texttt{practico1a})}
+\textit{PostgreSQL 14+ (\texttt{practico1a}):}
 
 \begin{lstlisting}
 SET search_path TO practico1a;
@@ -957,22 +1116,26 @@ FOR EACH ROW
 EXECUTE FUNCTION practico1a.fn_producto_mayusculas();
 \end{lstlisting}
 
-\paragraph{Detalle.} En MySQL se asigna \texttt{NEW.descripcion} con
-\texttt{SET}; en PostgreSQL se asigna directamente con \texttt{:=} y
-se devuelve \texttt{NEW}. El \texttt{TRIM/BTRIM} adicional limpia
-espacios al principio y al final, defendiéndose de errores de
-formato.
+\bloquePorque
 
+\begin{itemize}
+    \item Es un trigger \texttt{BEFORE INSERT}: la modificación de \texttt{NEW.descripcion} ocurre \emph{antes} de que la fila se grabe físicamente, así el valor final es la descripción en mayúsculas y sin espacios al borde.
+    \item En MySQL se asigna con \texttt{SET NEW.col = ...}; en PostgreSQL se asigna directamente con \texttt{NEW.col := ...} y se retorna \texttt{NEW}. Si la función olvida el \texttt{RETURN NEW}, el \texttt{INSERT} se cancela silenciosamente.
+    \item \texttt{TRIM}/\texttt{BTRIM} adicional limpia espacios al inicio y al final, blindando contra entradas con formato sucio.
+\end{itemize}
+
+\bloqueMySQL
+
+Cubierto en la \textit{Solución}: el inciso pide ambas bases (MySQL y PostgreSQL) y la sección incluye las dos.
+
+% -----------------------------------------------------
 \subsection{b) Auditoría de cambios en \texttt{producto.cantidad}}
 
-La auditoría debe registrar \texttt{cod\_producto}, el
-\emph{movimiento} (\texttt{NEW.cantidad - OLD.cantidad}), la fecha y
-el \emph{usuario logueado en la aplicación cliente}. Como el motor no
-tiene forma de conocer el usuario de aplicación por sí mismo, la
-aplicación lo provee a través de una variable de sesión que el
-trigger lee.
+\bloqueSolucion
 
-\subsubsection*{MySQL 8+}
+La auditoría debe registrar \texttt{cod\_producto}, el movimiento (\texttt{NEW.cantidad - OLD.cantidad}), la fecha y el usuario \emph{de la aplicación cliente}. Como el motor no tiene forma de conocer ese usuario por sí mismo, la aplicación lo provee a través de una variable de sesión que el trigger lee.
+
+\textit{MySQL 8+:}
 
 \begin{lstlisting}
 USE practico1a_mysql;
@@ -996,7 +1159,7 @@ BEGIN
     DECLARE v_usuario_app VARCHAR(100);
 
     IF NEW.cantidad <> OLD.cantidad THEN
-        -- La aplicacion debe setear esta variable por sesion.
+        -- La aplicacion debe setear esta variable de sesion:
         --   SET @app_user_code = 'VENDEDOR_APP_01';
         SET v_usuario_app = @app_user_code;
 
@@ -1021,16 +1184,7 @@ END$$
 DELIMITER ;
 \end{lstlisting}
 
-\paragraph{Uso desde la aplicación.}
-
-\begin{lstlisting}
-SET @app_user_code = 'VENDEDOR_APP_01';
-UPDATE producto SET cantidad = cantidad + 5 WHERE cod_producto = 101;
-
-SELECT * FROM auditoriaProducto ORDER BY id_auditoria DESC;
-\end{lstlisting}
-
-\subsubsection*{PostgreSQL 14+}
+\textit{PostgreSQL 14+:}
 
 \begin{lstlisting}
 SET search_path TO practico1a;
@@ -1056,7 +1210,7 @@ DECLARE
     v_usuario_app TEXT;
 BEGIN
     IF NEW.cantidad <> OLD.cantidad THEN
-        -- La aplicacion debe setear esta variable de sesion.
+        -- La aplicacion debe setear esta variable de sesion:
         --   SET app.user_code = 'VENDEDOR_APP_01';
         v_usuario_app := current_setting('app.user_code', true);
 
@@ -1087,44 +1241,51 @@ FOR EACH ROW
 EXECUTE FUNCTION practico1a.fn_auditoria_producto_cantidad();
 \end{lstlisting}
 
-\begin{nota}
-\textbf{Por qué \texttt{AFTER UPDATE} y no \texttt{BEFORE}.} La
-auditoría sólo tiene sentido cuando la modificación ya ocurrió. Si
-algún \texttt{CHECK} o trigger anterior aborta el \texttt{UPDATE}, no
-debe haber registro de auditoría: usando \texttt{AFTER UPDATE},
-PostgreSQL y MySQL garantizan que el trigger sólo dispara cuando la
-operación es exitosa.
-\end{nota}
+\bloquePorque
 
+\begin{itemize}
+    \item \textbf{Por qué \texttt{AFTER UPDATE} y no \texttt{BEFORE}.} La auditoría solo tiene sentido cuando la modificación ya ocurrió. Si un \texttt{CHECK} o un trigger anterior aborta el \texttt{UPDATE}, no debe quedar registro: con \texttt{AFTER UPDATE}, ambos motores garantizan que el trigger solo dispara cuando la operación es exitosa.
+    \item El \texttt{IF NEW.cantidad <> OLD.cantidad} ahorra trabajo cuando el \texttt{UPDATE} no toca esa columna (por ejemplo, si el cambio es solo en \texttt{precio}). En PostgreSQL, la cláusula \texttt{AFTER UPDATE OF cantidad} es aún más eficiente: el trigger ni siquiera se invoca si esa columna no cambia.
+    \item \textbf{Usuario de aplicación.} El motor no conoce el usuario lógico de la app; la aplicación lo inyecta en una variable de sesión (\texttt{@app\_user\_code} en MySQL, \texttt{current\_setting('app.user\_code')} en PostgreSQL) que el trigger lee. Si la app olvida setearla, el trigger aborta con \texttt{SIGNAL}/\texttt{RAISE EXCEPTION}, forzando a configurarla.
+\end{itemize}
+
+\bloqueMySQL
+
+Cubierto en la \textit{Solución} (el inciso pide ambas bases).
+
+\bloquePrueba
+
+\begin{lstlisting}
+-- MySQL
+SET @app_user_code = 'VENDEDOR_APP_01';
+UPDATE producto SET cantidad = cantidad + 5 WHERE cod_producto = 101;
+SELECT * FROM auditoriaProducto ORDER BY id_auditoria DESC;
+
+-- PostgreSQL
+SET app.user_code = 'VENDEDOR_APP_01';
+UPDATE practico1a.producto SET cantidad = cantidad + 5 WHERE cod_producto = 101;
+SELECT * FROM practico1a.auditoria_producto ORDER BY id_auditoria DESC;
+\end{lstlisting}
+
+% -----------------------------------------------------
 \subsection{c) Autonumerado de \texttt{parquimetro}}
 
-Sobre la base \texttt{practico1b} (estacionamiento del Práctico 1.b)
-hay que hacer que \texttt{id\_parquimetro} se asigne automáticamente.
+\bloqueSolucion
 
-\subsubsection*{MySQL 8+}
+\textit{MySQL 8+ (\texttt{practico1b\_mysql}):} basta declarar la columna como \texttt{AUTO\_INCREMENT}.
 
 \begin{lstlisting}
 USE practico1b_mysql;
 
 ALTER TABLE parquimetro
     MODIFY id_parquimetro INT NOT NULL AUTO_INCREMENT;
-\end{lstlisting}
 
-Después de ejecutar esto, basta con omitir la columna en el
-\texttt{INSERT}:
-
-\begin{lstlisting}
+-- Despues, omitir la columna en el INSERT:
 INSERT INTO parquimetro (calle, altura) VALUES ('Colon', 1500);
 SELECT * FROM parquimetro ORDER BY id_parquimetro;
 \end{lstlisting}
 
-\subsubsection*{Oracle XE 10/11 (\texttt{SEQUENCE + TRIGGER})}
-
-Oracle 10/11 XE no tiene \texttt{IDENTITY} (apareció en Oracle 12c),
-así que el patrón clásico es \emph{secuencia + trigger}. La
-secuencia genera valores únicos crecientes; el trigger los asigna a
-\texttt{:NEW.id\_parquimetro} cuando la sentencia no provee uno
-explícito.
+\textit{Oracle XE 10/11 (\texttt{SEQUENCE + TRIGGER}):} no hay \texttt{IDENTITY} hasta Oracle 12c; el patrón es secuencia + trigger.
 
 \begin{lstlisting}
 -- Limpieza opcional para re-ejecutar el script.
@@ -1162,58 +1323,35 @@ END;
 /
 \end{lstlisting}
 
-Prueba:
+\bloquePorque
 
-\begin{lstlisting}
-INSERT INTO parquimetro (calle, altura) VALUES ('Colon', 1500);
-SELECT * FROM parquimetro ORDER BY id_parquimetro;
-\end{lstlisting}
+\begin{itemize}
+    \item En MySQL, \texttt{AUTO\_INCREMENT} es una propiedad de la columna que el motor administra automáticamente; el cliente puede omitir la columna en el \texttt{INSERT} y MySQL la rellena.
+    \item En Oracle 10/11 XE el mismo efecto requiere dos objetos cooperando: la \texttt{SEQUENCE} produce valores únicos crecientes, y el \texttt{TRIGGER BEFORE INSERT} los inyecta en \texttt{:NEW.id\_parquimetro} cuando el cliente no proporciona uno explícito.
+    \item La cláusula \texttt{WHEN (NEW.id\_parquimetro IS NULL)} evita pisar los \texttt{INSERT} con ID explícito, típicos en cargas de datos de prueba.
+    \item El bloque PL/SQL que arranca la secuencia con \texttt{MAX + 1} sirve para que los IDs no choquen con los datos ya cargados en el Práctico 1.b.
+\end{itemize}
 
-\paragraph{Comparación con MySQL.} En MySQL es suficiente declarar la
-columna como \texttt{AUTO\_INCREMENT}. En Oracle 10/11 XE el mismo
-efecto requiere dos objetos cooperando: la secuencia
-(\texttt{seq\_parquimetro}) que produce valores y el trigger
-(\texttt{bi\_parquimetro\_autonumerado}) que los inyecta en la fila
-sólo cuando el cliente no provee uno explícito. La cláusula
-\texttt{WHEN (NEW.id\_parquimetro IS NULL)} evita pisar los inserts
-con ID explícito --- típicos en cargas de datos de prueba.
+\bloqueMySQL
+
+Cubierto en la \textit{Solución}: el inciso pide explícitamente MySQL para la base de estacionamiento (y, además, plantea la pregunta abierta de cómo resolverlo en Oracle).
 
 % =====================================================
 \section*{Conclusión}
 \addcontentsline{toc}{section}{Conclusión}
 % =====================================================
 
-Los cinco ejercicios cubren el espectro de programación del lado
-servidor: \emph{triggers} para reglas que dependen de varias tablas
-(Ej.\ 1), \emph{funciones} con cálculo manual y parámetros
-\texttt{IN}/\texttt{OUT} (Ej.\ 2), \emph{procedimientos} con
-validación, transaccionalidad y mensajes por pantalla (Ej.\ 3),
-\emph{procedimientos} con seguridad por invocador (Ej.\ 4) y
-\emph{triggers} de normalización, auditoría y autonumerado (Ej.\ 5).
+Los cinco ejercicios cubren el espectro de programación del lado servidor: \emph{triggers} para reglas que dependen de varias tablas (Ej.~1), \emph{funciones} con cálculo manual y parámetros \texttt{IN}/\texttt{OUT} (Ej.~2), \emph{procedimientos} con validación, transaccionalidad y mensajes por pantalla (Ej.~3), \emph{procedimientos} con seguridad por invocador (Ej.~4) y \emph{triggers} de normalización, auditoría y autonumerado (Ej.~5).
 
-Los puntos importantes para llevarse al parcial son:
+Puntos importantes para el parcial:
 
 \begin{itemize}
-    \item \textbf{BEFORE/AFTER + INSERT/UPDATE/DELETE} es la matriz
-    básica del trigger; \texttt{NEW} y \texttt{OLD} dan acceso a la
-    fila nueva y vieja.
-    \item Para \emph{abortar} desde el trigger: \texttt{SIGNAL
-    SQLSTATE '45000'} en MySQL, \texttt{RAISE EXCEPTION} en
-    PostgreSQL, \texttt{RAISE\_APPLICATION\_ERROR} en Oracle.
-    \item Las \emph{funciones} se asocian a \texttt{RETURN} de un valor;
-    los \emph{procedimientos} se invocan con \texttt{CALL} (MySQL,
-    PostgreSQL) o en bloques \texttt{BEGIN \dots\ END} (Oracle) y
-    pueden tener parámetros \texttt{IN}, \texttt{OUT} e \texttt{INOUT}.
-    \item Para \emph{auditar el usuario de aplicación} se usan
-    variables de sesión: \texttt{@var} en MySQL,
-    \texttt{current\_setting(\dots)} en PostgreSQL.
-    \item \texttt{SQL SECURITY INVOKER}/\texttt{DEFINER} en MySQL es la
-    pieza que conecta el Práctico 3 con el Práctico 2 (DCL): el
-    primero asume permisos del invocador, el segundo (default) los del
-    creador.
-    \item \texttt{AUTO\_INCREMENT} (MySQL) y \texttt{IDENTITY}
-    (PostgreSQL/Oracle 12+) ahorran código; en Oracle 10/11 XE el
-    patrón es \texttt{SEQUENCE + TRIGGER BEFORE INSERT}.
+    \item \textbf{BEFORE/AFTER + INSERT/UPDATE/DELETE} es la matriz básica del trigger; \texttt{NEW} y \texttt{OLD} dan acceso a la fila nueva y vieja.
+    \item Para \emph{abortar} desde el trigger: \texttt{SIGNAL SQLSTATE '45000'} en MySQL, \texttt{RAISE EXCEPTION} en PostgreSQL, \texttt{RAISE\_APPLICATION\_ERROR} en Oracle.
+    \item Las \emph{funciones} se asocian a \texttt{RETURN} de un valor; los \emph{procedimientos} se invocan con \texttt{CALL} (MySQL, PostgreSQL) o en bloques \texttt{BEGIN ... END} (Oracle) y pueden tener \texttt{IN}, \texttt{OUT} e \texttt{INOUT}. En MySQL, los parámetros \texttt{OUT} solo existen en procedimientos.
+    \item Para \emph{auditar el usuario de aplicación}: variables de sesión (\texttt{@var} en MySQL, \texttt{current\_setting(...)} en PostgreSQL).
+    \item \texttt{SQL SECURITY INVOKER}/\texttt{DEFINER} en MySQL es la pieza que conecta el Práctico 3 con el Práctico 2 (DCL).
+    \item \texttt{AUTO\_INCREMENT} (MySQL) e \texttt{IDENTITY} (PostgreSQL/Oracle 12+) ahorran código; en Oracle 10/11 XE el patrón es \texttt{SEQUENCE + TRIGGER BEFORE INSERT}.
 \end{itemize}
 
 \end{document}
