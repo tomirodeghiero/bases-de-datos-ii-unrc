@@ -87,7 +87,7 @@ export default function App() {
 
       <header className="hero">
         <p className="eyebrow">7 prácticos · una sola pizarra</p>
-        <h1 className="title">Bases de Datos II, para tocar con las manos.</h1>
+        <h1 className="title">Bases de Datos II</h1>
         <p className="lead">
           Cada concepto del curso convertido en un simulador: armá <em>joins</em>, propagá
           privilegios, ejecutá procedimientos paso a paso, transformá árboles de consulta, construí

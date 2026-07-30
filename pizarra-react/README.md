@@ -1,6 +1,6 @@
 # Pizarra Interactiva · Bases de Datos II (UNRC)
 
-Aplicación **React + Vite** que convierte cada concepto del curso en un simulador para tocar con las manos. Una sola pizarra con 7 prácticos + un recetario de plantillas.
+Aplicación **React + Vite** que convierte cada concepto del curso en un simulador interactivo. Una sola pizarra con 7 prácticos + un recetario de plantillas.
 
 ## Correr en local
 
